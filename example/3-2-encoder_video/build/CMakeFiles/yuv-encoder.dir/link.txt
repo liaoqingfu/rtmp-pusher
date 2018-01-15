@@ -1,0 +1,1 @@
+g++     CMakeFiles/yuv-encoder.dir/3-2-main.c.o  -o yuv-encoder  -L/usr/local/ffmpeg/lib -rdynamic -lavcodec -lswscale -lavutil -lavformat -lswresample -lSDL2 -Wl,-rpath,/usr/local/ffmpeg/lib 
