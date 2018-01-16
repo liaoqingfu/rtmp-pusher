@@ -104,7 +104,9 @@ void audio_callback( void *userdata, Uint8 *stream, int len )
 				/* 错误则静音 */
 				audio_buf_size = 1024;
 				memset( audio_buf, 0, audio_buf_size );
-			}else  {
+			}
+			else  
+			{
 				audio_buf_size = audio_size;
 			}
 			audio_buf_index = 0;    /* 回到缓冲区开头 */
@@ -539,6 +541,7 @@ int main( int argc, char *argv[] )
 	{
 		if ( packet.stream_index == videoStream ) /* 是一个视频帧 */
 		{
+			
 			/* Decode video frame */
 			avcodec_decode_video2( pVideoCodecCtx, pVideoFrame, &frameFinished,
 					       &packet );

@@ -1,303 +1,377 @@
-
-/** 
- * 最简单的基于FFmpeg的AVFilter例子（叠加水印）
- * Simplest FFmpeg AVfilter Example (Watermark)
+/*
+ * Copyright (c) 2010 Nicolas George
+ * Copyright (c) 2011 Stefano Sabatini
  *
- * 雷霄骅 Lei Xiaohua
- * leixiaohua1020@126.com
- * 中国传媒大学/数字电视技术
- * Communication University of China / Digital TV Technology
- * http://blog.csdn.net/leixiaohua1020
- * 
- * 本程序使用FFmpeg的AVfilter实现了视频的水印叠加功能。
- * 可以将一张PNG图片作为水印叠加到视频上。
- * 是最简单的FFmpeg的AVFilter方面的教程。
- * 适合FFmpeg的初学者。
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * This software uses FFmpeg's AVFilter to add watermark in a video file.
- * It can add a PNG format picture as watermark to a video file.
- * It's the simplest example based on FFmpeg's AVFilter. 
- * Suitable for beginner of FFmpeg 
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
-#include <stdio.h>
 
-#define __STDC_CONSTANT_MACROS
 
-#ifdef _WIN32
-#define snprintf _snprintf
-//Windows
-extern "C"
-{
-#include "libavcodec/avcodec.h"
-#include "libavformat/avformat.h"
-#include "libavfilter/avfiltergraph.h"
-#include "libavfilter/buffersink.h"
-#include "libavfilter/buffersrc.h"
-#include "libavutil/avutil.h"
-#include "libswscale/swscale.h"
-#include "SDL/SDL.h"
-};
-#else
-//Linux...
-#ifdef __cplusplus
-extern "C"
-{
-#endif
+/**
+ * @file
+ * API example for decoding and filtering
+ * @example filtering_video.c
+ */
+
+#define _XOPEN_SOURCE 600 /* for usleep */
+#include <unistd.h>
+
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavfilter/avfiltergraph.h>
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
-#include <libavutil/avutil.h>
-#include <libswscale/swscale.h>
-#include <SDL/SDL.h>
-#ifdef __cplusplus
-};
-#endif
-#endif
+#include <libavutil/opt.h>
+#include <sys/time.h>
 
-//Enable SDL?
-#define ENABLE_SDL 1
-//Output YUV data?
+/*
+ * const char *filter_descr = "scale=78:24,transpose=cclock";
+ * const char *filter_descr = "scale=78:24,transpose=cclock";
+ */
+const char *filter_descr = "movie=my_logo.png[wm];[in][wm]overlay=20:20[out]";
+
+
+/* other way:
+ * scale=78:24 [scl]; [scl] transpose=cclock // assumes "[in]" and "[out]" to be input output pads respectively
+ */
+
+static AVFormatContext	*fmt_ctx;
+static AVCodecContext	*dec_ctx;
+AVFilterContext		*buffersink_ctx;
+AVFilterContext		*buffersrc_ctx;
+AVFilterGraph		*filter_graph;
+static int		video_stream_index	= -1;
+static int64_t		last_pts		= AV_NOPTS_VALUE;
 #define ENABLE_YUVFILE 1
 
-const char *filter_descr = "movie=my_logo.png[wm];[in][wm]overlay=5:5[out]";
 
-static AVFormatContext *pFormatCtx;
-static AVCodecContext *pCodecCtx;
-AVFilterContext *buffersink_ctx;
-AVFilterContext *buffersrc_ctx;
-AVFilterGraph *filter_graph;
-static int video_stream_index = -1;
-
-
-
-static int open_input_file(const char *filename)
+uint64_t getNowTime()
 {
-    int ret;
-    AVCodec *dec;
-
-    if ((ret = avformat_open_input(&pFormatCtx, filename, NULL, NULL)) < 0) {
-        printf( "Cannot open input file\n");
-        return ret;
-    }
-
-    if ((ret = avformat_find_stream_info(pFormatCtx, NULL)) < 0) {
-        printf( "Cannot find stream information\n");
-        return ret;
-    }
-
-    /* select the video stream */
-    ret = av_find_best_stream(pFormatCtx, AVMEDIA_TYPE_VIDEO, -1, -1, &dec, 0);
-    if (ret < 0) {
-        printf( "Cannot find a video stream in the input file\n");
-        return ret;
-    }
-    video_stream_index = ret;
-    pCodecCtx = pFormatCtx->streams[video_stream_index]->codec;
-
-    /* init the video decoder */
-    if ((ret = avcodec_open2(pCodecCtx, dec, NULL)) < 0) {
-        printf( "Cannot open video decoder\n");
-        return ret;
-    }
-
-    return 0;
+	struct timeval tv;
+	gettimeofday( &tv, NULL );
+	return(tv.tv_sec * 1000 + tv.tv_usec / 1000);
 }
 
-static int init_filters(const char *filters_descr)
+static int open_input_file( const char *filename )
 {
-    char args[512];
-    int ret;
-    AVFilter *buffersrc  = avfilter_get_by_name("buffer");
-    AVFilter *buffersink = avfilter_get_by_name("ffbuffersink");
-    AVFilterInOut *outputs = avfilter_inout_alloc();
-    AVFilterInOut *inputs  = avfilter_inout_alloc();
-    enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
-    AVBufferSinkParams *buffersink_params;
+	int	ret;
+	AVCodec *dec;
 
-    filter_graph = avfilter_graph_alloc();
-
-    /* buffer video source: the decoded frames from the decoder will be inserted here. */
-    snprintf(args, sizeof(args),
-            "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d",
-            pCodecCtx->width, pCodecCtx->height, pCodecCtx->pix_fmt,
-            pCodecCtx->time_base.num, pCodecCtx->time_base.den,
-            pCodecCtx->sample_aspect_ratio.num, pCodecCtx->sample_aspect_ratio.den);
-
-    ret = avfilter_graph_create_filter(&buffersrc_ctx, buffersrc, "in",
-                                       args, NULL, filter_graph);
-    if (ret < 0) {
-        printf("Cannot create buffer source\n");
-        return ret;
-    }
-
-    /* buffer video sink: to terminate the filter chain. */
-    buffersink_params = av_buffersink_params_alloc();
-    buffersink_params->pixel_fmts = pix_fmts;
-    ret = avfilter_graph_create_filter(&buffersink_ctx, buffersink, "out",
-                                       NULL, buffersink_params, filter_graph);
-    av_free(buffersink_params);
-    if (ret < 0) {
-        printf("Cannot create buffer sink\n");
-        return ret;
-    }
-
-    /* Endpoints for the filter graph. */
-    outputs->name       = av_strdup("in");
-    outputs->filter_ctx = buffersrc_ctx;
-    outputs->pad_idx    = 0;
-    outputs->next       = NULL;
-
-    inputs->name       = av_strdup("out");
-    inputs->filter_ctx = buffersink_ctx;
-    inputs->pad_idx    = 0;
-    inputs->next       = NULL;
-
-    if ((ret = avfilter_graph_parse_ptr(filter_graph, filters_descr,
-                                    &inputs, &outputs, NULL)) < 0)
-        return ret;
-
-    if ((ret = avfilter_graph_config(filter_graph, NULL)) < 0)
-        return ret;
-    return 0;
-}
-
-
-int main(int argc, char* argv[])
-{
-    int ret;
-    AVPacket packet;
-    AVFrame *pFrame;
-	AVFrame *pFrame_out;
-
-    int got_frame;
-
-    av_register_all();
-    avfilter_register_all();
-
-    if ((ret = open_input_file("cuc_ieschool.flv")) < 0)
-        goto end;
-    if ((ret = init_filters(filter_descr)) < 0)
-        goto end;
-
-#if ENABLE_YUVFILE
-	FILE *fp_yuv=fopen("test.yuv","wb+");
-#endif
-#if ENABLE_SDL
-	SDL_Surface *screen; 
-	SDL_Overlay *bmp; 
-	SDL_Rect rect;
-	if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {  
-		printf( "Could not initialize SDL - %s\n", SDL_GetError()); 
-		return -1;
-	} 
-	screen = SDL_SetVideoMode(pCodecCtx->width, pCodecCtx->height, 0, 0);
-	if(!screen) {  
-		printf("SDL: could not set video mode - exiting\n");  
-		return -1;
+	if ( (ret = avformat_open_input( &fmt_ctx, filename, NULL, NULL ) ) < 0 )
+	{
+		av_log( NULL, AV_LOG_ERROR, "Cannot open input file\n" );
+		return(ret);
 	}
-	bmp = SDL_CreateYUVOverlay(pCodecCtx->width, pCodecCtx->height,SDL_YV12_OVERLAY, screen); 
 
-	SDL_WM_SetCaption("Simplest FFmpeg Video Filter",NULL);
-#endif
+	if ( (ret = avformat_find_stream_info( fmt_ctx, NULL ) ) < 0 )
+	{
+		av_log( NULL, AV_LOG_ERROR, "Cannot find stream information\n" );
+		return(ret);
+	}
 
-	pFrame=av_frame_alloc();
-	pFrame_out=av_frame_alloc();
+	/* select the video stream */
+	ret = av_find_best_stream( fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, &dec, 0 );
+	if ( ret < 0 )
+	{
+		av_log( NULL, AV_LOG_ERROR, "Cannot find a video stream in the input file\n" );
+		return(ret);
+	}
+	video_stream_index = ret;
 
-    /* read all packets */
-    while (1) {
+	/* create decoding context */
+	dec_ctx = avcodec_alloc_context3( dec );
+	if ( !dec_ctx )
+		return(AVERROR( ENOMEM ) );
+	avcodec_parameters_to_context( dec_ctx, fmt_ctx->streams[video_stream_index]->codecpar );
+	av_opt_set_int( dec_ctx, "refcounted_frames", 1, 0 );
 
-		ret = av_read_frame(pFormatCtx, &packet);
-        if (ret< 0)
-            break;
+	/* init the video decoder */
+	if ( (ret = avcodec_open2( dec_ctx, dec, NULL ) ) < 0 )
+	{
+		av_log( NULL, AV_LOG_ERROR, "Cannot open video decoder\n" );
+		return(ret);
+	}
 
-        if (packet.stream_index == video_stream_index) {
-            got_frame = 0;
-            ret = avcodec_decode_video2(pCodecCtx, pFrame, &got_frame, &packet);
-            if (ret < 0) {
-                printf( "Error decoding video\n");
-                break;
-            }
+	return(0);
+}
 
-            if (got_frame) {
-                pFrame->pts = av_frame_get_best_effort_timestamp(pFrame);
-				
-                /* push the decoded frame into the filtergraph */
-                if (av_buffersrc_add_frame(buffersrc_ctx, pFrame) < 0) {
-                    printf( "Error while feeding the filtergraph\n");
-                    break;
-                }
 
-                /* pull filtered pictures from the filtergraph */
-                while (1) {
+static int init_filters( const char *filters_descr )
+{
+	char		args[512];
+	int		ret		= 0;
+	AVFilter	*buffersrc	= avfilter_get_by_name( "buffer" );
+	AVFilter	*buffersink	= avfilter_get_by_name( "buffersink" );
+	AVFilterInOut	*outputs	= avfilter_inout_alloc();
+	AVFilterInOut	*inputs		= avfilter_inout_alloc();
+	AVRational	time_base	= fmt_ctx->streams[video_stream_index]->time_base;
+	/* 这里的参数很关键 */
+	enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
 
-					ret = av_buffersink_get_frame(buffersink_ctx, pFrame_out);
-					if (ret < 0)
-						break;
+	filter_graph = avfilter_graph_alloc();
+	if ( !outputs || !inputs || !filter_graph )
+	{
+		ret = AVERROR( ENOMEM );
+		goto end;
+	}
 
-					printf("Process 1 frame!\n");
+	/* buffer video source: the decoded frames from the decoder will be inserted here. */
+	snprintf( args, sizeof(args),
+		  "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d",
+		  dec_ctx->width, dec_ctx->height, dec_ctx->pix_fmt,
+		  time_base.num, time_base.den,
+		  dec_ctx->sample_aspect_ratio.num, dec_ctx->sample_aspect_ratio.den );
 
-                    if (pFrame_out->format==AV_PIX_FMT_YUV420P) {
-#if ENABLE_YUVFILE
-						//Y, U, V
-						for(int i=0;i<pFrame_out->height;i++){
-							fwrite(pFrame_out->data[0]+pFrame_out->linesize[0]*i,1,pFrame_out->width,fp_yuv);
-						}
-						for(int i=0;i<pFrame_out->height/2;i++){
-							fwrite(pFrame_out->data[1]+pFrame_out->linesize[1]*i,1,pFrame_out->width/2,fp_yuv);
-						}
-						for(int i=0;i<pFrame_out->height/2;i++){
-							fwrite(pFrame_out->data[2]+pFrame_out->linesize[2]*i,1,pFrame_out->width/2,fp_yuv);
-						}
-#endif
-						
-#if ENABLE_SDL
-						SDL_LockYUVOverlay(bmp);
-						int y_size=pFrame_out->width*pFrame_out->height;
-						memcpy(bmp->pixels[0],pFrame_out->data[0],y_size);   //Y
-						memcpy(bmp->pixels[2],pFrame_out->data[1],y_size/4); //U
-						memcpy(bmp->pixels[1],pFrame_out->data[2],y_size/4); //V 
-						bmp->pitches[0]=pFrame_out->linesize[0];
-						bmp->pitches[2]=pFrame_out->linesize[1];   
-						bmp->pitches[1]=pFrame_out->linesize[2];
-						SDL_UnlockYUVOverlay(bmp); 
-						rect.x = 0;    
-						rect.y = 0;    
-						rect.w = pFrame_out->width;    
-						rect.h = pFrame_out->height;    
-						SDL_DisplayYUVOverlay(bmp, &rect); 
-						//Delay 40ms
-						SDL_Delay(40);
-#endif
-                    }
-					av_frame_unref(pFrame_out);
-                }
-            }
-			av_frame_unref(pFrame);
-        }
-        av_free_packet(&packet);
-    }
-#if ENABLE_YUVFILE
-	fclose(fp_yuv);
-#endif
+	ret = avfilter_graph_create_filter( &buffersrc_ctx, buffersrc, "in",
+					    args, NULL, filter_graph );
+	if ( ret < 0 )
+	{
+		av_log( NULL, AV_LOG_ERROR, "Cannot create buffer source\n" );
+		goto end;
+	}
+
+	/* buffer video sink: to terminate the filter chain. */
+	ret = avfilter_graph_create_filter( &buffersink_ctx, buffersink, "out",
+					    NULL, NULL, filter_graph );
+	if ( ret < 0 )
+	{
+		av_log( NULL, AV_LOG_ERROR, "Cannot create buffer sink\n" );
+		goto end;
+	}
+
+	ret = av_opt_set_int_list( buffersink_ctx, "pix_fmts", pix_fmts,
+				   AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN );
+	if ( ret < 0 )
+	{
+		av_log( NULL, AV_LOG_ERROR, "Cannot set output pixel format\n" );
+		goto end;
+	}
+
+
+	/*
+	 * Set the endpoints for the filter graph. The filter_graph will
+	 * be linked to the graph described by filters_descr.
+	 */
+
+
+	/*
+	 * The buffer source output must be connected to the input pad of
+	 * the first filter described by filters_descr; since the first
+	 * filter input label is not specified, it is set to "in" by
+	 * default.
+	 */
+	outputs->name		= av_strdup( "in" );
+	outputs->filter_ctx	= buffersrc_ctx;
+	outputs->pad_idx	= 0;
+	outputs->next		= NULL;
+
+
+	/*
+	 * The buffer sink input must be connected to the output pad of
+	 * the last filter described by filters_descr; since the last
+	 * filter output label is not specified, it is set to "out" by
+	 * default.
+	 */
+	inputs->name		= av_strdup( "out" );
+	inputs->filter_ctx	= buffersink_ctx;
+	inputs->pad_idx		= 0;
+	inputs->next		= NULL;
+
+	if ( (ret = avfilter_graph_parse_ptr( filter_graph, filters_descr,
+					      &inputs, &outputs, NULL ) ) < 0 )
+		goto end;
+
+	if ( (ret = avfilter_graph_config( filter_graph, NULL ) ) < 0 )
+		goto end;
 
 end:
-    avfilter_graph_free(&filter_graph);
-    if (pCodecCtx)
-        avcodec_close(pCodecCtx);
-    avformat_close_input(&pFormatCtx);
+	avfilter_inout_free( &inputs );
+	avfilter_inout_free( &outputs );
+
+	return(ret);
+}
 
 
-    if (ret < 0 && ret != AVERROR_EOF) {
-        char buf[1024];
-        av_strerror(ret, buf, sizeof(buf));
-        printf("Error occurred: %s\n", buf);
-        return -1;
-    }
+static void display_frame( const AVFrame *frame, AVRational time_base )
+{
+	int	x, y;
+	uint8_t *p0, *p;
+	int64_t delay;
 
-    return 0;
+	if ( frame->pts != AV_NOPTS_VALUE )
+	{
+		if ( last_pts != AV_NOPTS_VALUE )
+		{
+			/* sleep roughly the right amount of time;
+			 * usleep is in microseconds, just like AV_TIME_BASE. */
+			delay = av_rescale_q( frame->pts - last_pts,
+					      time_base, AV_TIME_BASE_Q );
+			if ( delay > 0 && delay < 1000000 )
+				usleep( delay );
+		}
+		last_pts = frame->pts;
+	}
+
+	/* Trivial ASCII grayscale display. */
+	p0 = frame->data[0];
+	puts( "\033c" );
+	for ( y = 0; y < frame->height; y++ )
+	{
+		p = p0;
+		for ( x = 0; x < frame->width; x++ )
+			putchar( " .-+#"[*(p++) / 52] );
+		putchar( '\n' );
+		p0 += frame->linesize[0];
+	}
+	fflush( stdout );
+}
+
+
+int main( int argc, char **argv )
+{
+	int		ret;
+	AVPacket	packet;
+	AVFrame		*frame		= av_frame_alloc();
+	AVFrame		*filt_frame	= av_frame_alloc();
+
+	if ( !frame || !filt_frame )
+	{
+		perror( "Could not allocate frame" );
+		exit( 1 );
+	}
+	if ( argc != 2 )
+	{
+		fprintf( stderr, "Usage: %s file\n", argv[0] );
+		exit( 1 );
+	}
+
+	av_register_all();
+	avfilter_register_all();
+
+	if ( (ret = open_input_file( argv[1] ) ) < 0 )
+		goto end;
+	if ( (ret = init_filters( filter_descr ) ) < 0 )
+		goto end;
+#if ENABLE_YUVFILE
+	FILE *fp_yuv = fopen( "test.yuv", "wb+" );
+#endif
+	/* read all packets */
+	while ( 1 )
+	{
+		if ( (ret = av_read_frame( fmt_ctx, &packet ) ) < 0 )
+			break;
+
+		if ( packet.stream_index == video_stream_index )
+		{
+			// 发送编码数据包
+			printf("\nsend_packet, t = %lu\n", getNowTime());
+			ret = avcodec_send_packet( dec_ctx, &packet );
+			if ( ret < 0 )
+			{
+				av_log( NULL, AV_LOG_ERROR, "Error while sending a packet to the decoder\n" );
+				break;
+			}
+
+			while ( ret >= 0 )
+			{
+				// 接收编码数据包
+				printf("receive_frame, t = %lu\n", getNowTime());
+				ret = avcodec_receive_frame( dec_ctx, frame );
+				if ( ret == AVERROR( EAGAIN ) || ret == AVERROR_EOF )
+				{
+					break;
+				} 
+				else if ( ret < 0 )
+				{
+					av_log( NULL, AV_LOG_ERROR, "Error while receiving a frame from the decoder\n" );
+					goto end;
+				}
+
+				if ( ret >= 0 )
+				{
+					frame->pts = av_frame_get_best_effort_timestamp( frame );
+
+					/* push the decoded frame into the filtergraph */
+					printf("add_frame, t = %lu\n", getNowTime());
+					if ( av_buffersrc_add_frame_flags( buffersrc_ctx, frame, AV_BUFFERSRC_FLAG_KEEP_REF ) < 0 )
+					{
+						av_log( NULL, AV_LOG_ERROR, "Error while feeding the filtergraph\n" );
+						break;
+					}
+
+					/* pull filtered frames from the filtergraph */
+					while ( 1 )
+					{
+						printf("get_frame, t = %lu\n", getNowTime());
+						ret = av_buffersink_get_frame( buffersink_ctx, filt_frame );
+						if ( ret == AVERROR( EAGAIN ) || ret == AVERROR_EOF )
+						{
+							printf("get_frame break\n");
+							break;
+						}	
+						if ( ret < 0 )
+							goto end;
+						 printf("format = %d, %d\n", filt_frame->format, AV_PIX_FMT_YUV420P); 
+						if ( filt_frame->format == AV_PIX_FMT_YUV420P )
+						{
+#if ENABLE_YUVFILE
+							/* Y, U, V */
+							for ( int i = 0; i < filt_frame->height; i++ )
+							{
+								fwrite( filt_frame->data[0] + filt_frame->linesize[0] * i, 1, filt_frame->width, fp_yuv );
+							}
+							for ( int i = 0; i < filt_frame->height / 2; i++ )
+							{
+								fwrite( filt_frame->data[1] + filt_frame->linesize[1] * i, 1, filt_frame->width / 2, fp_yuv );
+							}
+							for ( int i = 0; i < filt_frame->height / 2; i++ )
+							{
+								fwrite( filt_frame->data[2] + filt_frame->linesize[2] * i, 1, filt_frame->width / 2, fp_yuv );
+							}
+#endif
+						}
+						/* display_frame(filt_frame, buffersink_ctx->inputs[0]->time_base); */
+						av_frame_unref( filt_frame );
+						break;
+					}
+					av_frame_unref( frame );
+				}
+			}
+		}
+		av_packet_unref( &packet );
+	}
+#if ENABLE_YUVFILE
+	fclose( fp_yuv );
+#endif
+end:
+	avfilter_graph_free( &filter_graph );
+	avcodec_free_context( &dec_ctx );
+	avformat_close_input( &fmt_ctx );
+	av_frame_free( &frame );
+	av_frame_free( &filt_frame );
+
+	if ( ret < 0 && ret != AVERROR_EOF )
+	{
+		fprintf( stderr, "Error occurred: %s\n", av_err2str( ret ) );
+		exit( 1 );
+	}
+
+	exit( 0 );
 }
 
 

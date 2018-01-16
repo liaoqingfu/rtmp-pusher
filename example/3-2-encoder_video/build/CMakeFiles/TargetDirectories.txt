@@ -1,3 +1,0 @@
-/mnt/hgfs/ffmpeg/rtmp-pusher/example/3-2/build/CMakeFiles/edit_cache.dir
-/mnt/hgfs/ffmpeg/rtmp-pusher/example/3-2/build/CMakeFiles/rebuild_cache.dir
-/mnt/hgfs/ffmpeg/rtmp-pusher/example/3-2/build/CMakeFiles/yuv-encoder.dir

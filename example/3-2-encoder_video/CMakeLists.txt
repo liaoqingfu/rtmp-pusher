@@ -18,6 +18,6 @@ LINK_DIRECTORIES(/usr/local/ffmpeg/lib/)
 
 
 SET(PROJECT_SRC 3-2-main.c)
-set(PROJECT_LIBS avcodec swscale avutil avformat swresample SDL2)
+set(PROJECT_LIBS x264 avcodec swscale avutil avformat swresample SDL2)
 add_executable(yuv-encoder ${PROJECT_SRC})
 target_link_libraries(yuv-encoder  ${PROJECT_LIBS})

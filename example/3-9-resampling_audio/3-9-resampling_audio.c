@@ -78,6 +78,8 @@ static void fill_samples(double *dst, int nb_samples, int nb_channels, int sampl
     }
 }
 
+// undefined reference to symbol 'sin@@GLIBC_2.2.5'
+// 需要添加链接库 -lm
 int main(int argc, char **argv)
 {
     int64_t src_ch_layout = AV_CH_LAYOUT_STEREO, dst_ch_layout = AV_CH_LAYOUT_SURROUND;
