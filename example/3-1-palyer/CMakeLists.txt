@@ -17,7 +17,7 @@ add_compile_options(-w)
 #LINK_DIRECTORIES(/usr/local/lib/)
 
 
-SET(PROJECT_SRC 3-1-main.c packet_queue.c)
+SET(PROJECT_SRC 3-1-main.c sdl_display.c sdl_audio_out.c packet_queue.c)
 set(PROJECT_LIBS avcodec swscale avutil avformat swresample SDL2)
 add_executable(simple-player ${PROJECT_SRC})
 target_link_libraries(simple-player  ${PROJECT_LIBS})
