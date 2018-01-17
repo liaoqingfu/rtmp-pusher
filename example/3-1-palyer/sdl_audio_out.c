@@ -241,7 +241,7 @@ int audio_decode_frame( AVCodecContext *pAudioCodecCtx,
 }
 
 
-void SDL2AudioOutInit(AVCodecContext	*pAudioCodecCtx)
+int SDL2AudioOutInit(AVCodecContext	*pAudioCodecCtx)
 {
 	/* 设置音频信息, 用来打开音频设备。 */
 	wantedSpec.freq	= pAudioCodecCtx->sample_rate;
@@ -262,7 +262,7 @@ void SDL2AudioOutInit(AVCodecContext	*pAudioCodecCtx)
 	if ( SDL_OpenAudio( &wantedSpec, &spec ) < 0 )
 	{
 		fprintf( ERR_STREAM, "Couldn't open Audio:%s\n", SDL_GetError() );
-		exit( -1 );
+		return -1;
 	}
 
 	/* 设置参数，供解码时候用, swr_alloc_set_opts的in部分参数 */
@@ -280,6 +280,8 @@ void SDL2AudioOutInit(AVCodecContext	*pAudioCodecCtx)
 
 	/* 初始化音频队列 */
 	packet_queue_init( &audioQueue );
+
+	return 0;
 }
 
 void SDL2AudioPushPacket(AVPacket *packet)

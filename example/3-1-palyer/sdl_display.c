@@ -26,9 +26,11 @@ SDL_Renderer 	*pRenderer = NULL; /* = SDL_CreateRenderer(pWindow, -1, 0); */
 
 SDL_Rect	rect;
 struct SwsContext	*pSwsCtx = NULL;
+AVFrame* pFrameYUV = NULL;
+enum AVPixelFormat sPixFmt = AV_PIX_FMT_YUV420P;
 
 
-void SDL2DisplayInit(int width, int height, enum AVPixelFormat pix_fmt)
+int SDL2DisplayInit(int width, int height, enum AVPixelFormat pix_fmt)
 {
 	pWindow = SDL_CreateWindow( "Video Window",
 					   SDL_WINDOWPOS_UNDEFINED,
@@ -38,7 +40,7 @@ void SDL2DisplayInit(int width, int height, enum AVPixelFormat pix_fmt)
 	if ( !pWindow )
 	{
 		fprintf( stderr, "SDL: could not set video mode - exiting\n" );
-		exit( 1 );
+		return -1;
 	}
 	
 	SDL_RendererInfo	info;
@@ -55,7 +57,13 @@ void SDL2DisplayInit(int width, int height, enum AVPixelFormat pix_fmt)
 	}
 
 	pFrameTexture = SDL_CreateTexture( pRenderer, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, width, height);
-
+	if(!pFrameTexture)
+	{
+		fprintf( stderr, "SDL: SDL_CreateTexture failed\n" );
+		return -1;
+	}
+	printf("pix_fmt = %d, %d\n", pix_fmt, AV_PIX_FMT_YUV420P);
+	// ffmepg decode output format为YUV420
 	pSwsCtx = sws_getContext
 			  (
 			width, height, pix_fmt,
@@ -65,10 +73,30 @@ void SDL2DisplayInit(int width, int height, enum AVPixelFormat pix_fmt)
 			NULL,
 			NULL
 			  );
+	if(!pSwsCtx)
+	{
+		fprintf( stderr, "SDL: sws_getContext failed\n" );
+		return -1;
+	}		  
 	rect.x	= 0;
 	rect.y	= 0;
 	rect.w	= width;
 	rect.h	= height;
+
+	// 分配用于保存转换后的视频帧
+	pFrameYUV = av_frame_alloc();
+	if (!pFrameYUV)
+	{
+		fprintf( stderr, "av_frame_alloc pFrameYUV  failed!\n" );
+		return -1;
+	}
+
+	int numBytes = avpicture_get_size( AV_PIX_FMT_YUV420P, width,  height );
+	uint8_t* buffer = (uint8_t *) av_malloc( numBytes * sizeof(uint8_t) );
+
+	avpicture_fill( (AVPicture *) pFrameYUV, buffer, AV_PIX_FMT_YUV420P, width, height );
+
+	return 0;
 }
 
 
@@ -79,18 +107,26 @@ static uint64_t getNowTime()
 	return(tv.tv_sec * 1000 + tv.tv_usec / 1000);
 }
 
-void SDL2Display(AVFrame *pVideoFrame, AVFrame* pFrameYUV, int height)
+void SDL2Display(AVFrame *pVideoFrame, int height)
 {
 	static uint64_t sPreTime = 0;
 	static uint64_t sPrePts = 0;
 	uint64_t curTime = getNowTime();
-	AVFrame *DisplayFrame;
+	AVFrame *pDisplayFrame;
 	//printf( "play pts = %lu\n", pVideoFrame->pts);
 
-	
+	if(!pVideoFrame)
+	{
+		printf( "pVideoFrame is null\n");
+		return;
+	}
+	//printf( "duration pts dif = %d,  t = %d\n",  pVideoFrame->pts - sPrePts,  curTime - sPreTime);
+	sPreTime = curTime;
+	sPrePts = pVideoFrame->pts;
+	//printf( "fix_format1 %d, %d\n", pFrameYUV->format, pVideoFrame->format);
 	if(pFrameYUV)
 	{
-		sws_scale
+		sws_scale			// 经过scale，pts信息被清除？
 			(
 				pSwsCtx,
 				(uint8_t const * const *) pVideoFrame->data,
@@ -100,27 +136,20 @@ void SDL2Display(AVFrame *pVideoFrame, AVFrame* pFrameYUV, int height)
 				pFrameYUV->data,
 				pFrameYUV->linesize
 			);
-		pVideoFrame = pFrameYUV;
+		pDisplayFrame = pFrameYUV;
 	}
 	else
 	{
-		pVideoFrame = pVideoFrame;
+		pDisplayFrame = pVideoFrame;
 	}
-	if(!pVideoFrame)
-	{
-		printf( "pVideoFrame is null\n");
-		return;
-	}
-	printf( "duration pts = %d,  t = %d\n", pVideoFrame->pts - sPrePts, 
-		curTime - sPreTime);
-	sPreTime = curTime;
-	sPrePts = pVideoFrame->pts;
+	
+	//printf( "fix_format2 %d, %d\n", pFrameYUV->format, pVideoFrame->format);
 	
 	/*
 	 * 视频帧直接显示
 	 * //iPitch 计算yuv一行数据占的字节数
 	 */
-	SDL_UpdateTexture( pFrameTexture, &rect, pFrameYUV->data[0], pFrameYUV->linesize[0] );
+	SDL_UpdateTexture( pFrameTexture, &rect, pDisplayFrame->data[0], pDisplayFrame->linesize[0] );
 	SDL_RenderClear( pRenderer );
 	SDL_RenderCopy( pRenderer, pFrameTexture, &rect, &rect );
 	SDL_RenderPresent( pRenderer );
@@ -136,6 +165,8 @@ void SDL2DisplayDestory()
 		SDL_DestroyRenderer(pRenderer);
 	if(pWindow)
 		SDL_DestroyWindow(pWindow);
+	if(pFrameYUV)
+		av_free( pFrameYUV );	
 }
 
 

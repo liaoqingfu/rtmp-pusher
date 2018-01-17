@@ -225,7 +225,7 @@ static int decode_packet( int *got_frame, int cached )
 			int convert_len2 = wanted_frame.channels * convert_len * av_get_bytes_per_sample( (enum AVSampleFormat) (wanted_frame.format));
 			//printf("convert_len = %d, %d\n",convert_len, convert_len2);
 			//fwrite(audio_buf, 1, convert_len2, audio_dst_file);
-			//fwrite(frame->data[0], 1, unpadded_linesize, audio_dst_file);
+			 //fwrite(frame->data[0], 1, unpadded_linesize, audio_dst_file);
 
 			
 		}

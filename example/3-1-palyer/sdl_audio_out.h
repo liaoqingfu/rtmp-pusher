@@ -13,7 +13,7 @@ extern "C"
 #include <libavformat/avformat.h>
 
 
-void SDL2AudioOutInit(AVCodecContext	*pAudioCodecCtx);
+int SDL2AudioOutInit(AVCodecContext	*pAudioCodecCtx);
 void SDL2AudioPushPacket(AVPacket *packet);
 void SDL2AudioOutPause(int pause);
 

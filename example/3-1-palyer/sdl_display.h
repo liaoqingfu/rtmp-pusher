@@ -13,8 +13,8 @@ extern "C"
 #include <libavformat/avformat.h>
 
 
-void SDL2DisplayInit(int width, int height, enum AVPixelFormat pix_fmt);
-void SDL2Display(AVFrame *pVideoFrame, AVFrame* pFrameYUV, int height);
+int SDL2DisplayInit(int width, int height, enum AVPixelFormat pix_fmt);
+void SDL2Display(AVFrame *pVideoFrame, int height);
 void SDL2DisplayDestory();
 #ifdef __cplusplus
 }
