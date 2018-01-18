@@ -37,161 +37,6 @@ void SavePcmS32px2(AVFrame* pFrame, int bytesPerSample, FILE *file)
 	}
 }
 
-// 临时测试函数，主要对比下自己修改的在做重采样时是否音质好些。
-int AudioResampling(AVCodecContext * audio_dec_ctx,AVFrame * pAudioDecodeFrame,  
-                    int out_sample_fmt,int out_channels ,int out_sample_rate , uint8_t * out_buf)  
-{  
-    //////////////////////////////////////////////////////////////////////////  
-    SwrContext * swr_ctx = NULL;  
-    int data_size = 0;  
-    int ret = 0;  
-    int64_t src_ch_layout = AV_CH_LAYOUT_STEREO; //初始化这样根据不同文件做调整  
-    int64_t dst_ch_layout = AV_CH_LAYOUT_STEREO; //这里设定ok  
-    int dst_nb_channels = 0;  
-    int dst_linesize = 0;  
-    int src_nb_samples = 0;  
-    int dst_nb_samples = 0;  
-    int max_dst_nb_samples = 0;  
-    uint8_t **dst_data = NULL;  
-    int resampled_data_size = 0;  
-      
-    //重新采样  
-    if (swr_ctx)  
-    {  
-        swr_free(&swr_ctx);  
-    }  
-    swr_ctx = swr_alloc();  
-    if (!swr_ctx)  
-    {  
-        printf("swr_alloc error \n");  
-        return -1;  
-    }  
-  
-    src_ch_layout = (audio_dec_ctx->channel_layout &&   
-        audio_dec_ctx->channels ==   
-        av_get_channel_layout_nb_channels(audio_dec_ctx->channel_layout)) ?   
-        audio_dec_ctx->channel_layout :   
-    av_get_default_channel_layout(audio_dec_ctx->channels);  
-  
-    if (out_channels == 1)  
-    {  
-        dst_ch_layout = AV_CH_LAYOUT_MONO;  
-    }  
-    else if(out_channels == 2)  
-    {  
-        dst_ch_layout = AV_CH_LAYOUT_STEREO;  
-    }  
-    else  
-    {  
-        //可扩展  
-    }  
-  
-    if (src_ch_layout <= 0)  
-    {  
-        printf("src_ch_layout error \n");  
-        return -1;  
-    }  
-  
-    src_nb_samples = pAudioDecodeFrame->nb_samples;  
-    if (src_nb_samples <= 0)  
-    {  
-        printf("src_nb_samples error \n");  
-        return -1;  
-    }  
-  
-    /* set options */  
-    av_opt_set_int(swr_ctx, "in_channel_layout",    src_ch_layout, 0);  
-    av_opt_set_int(swr_ctx, "in_sample_rate",       audio_dec_ctx->sample_rate, 0);  
-    av_opt_set_sample_fmt(swr_ctx, "in_sample_fmt", audio_dec_ctx->sample_fmt, 0);  
-  
-    av_opt_set_int(swr_ctx, "out_channel_layout",    dst_ch_layout, 0);  
-    av_opt_set_int(swr_ctx, "out_sample_rate",       out_sample_rate, 0);  
-    av_opt_set_sample_fmt(swr_ctx, "out_sample_fmt", (enum AVSampleFormat)out_sample_fmt, 0);  
-    swr_init(swr_ctx);  
-  
-    max_dst_nb_samples = dst_nb_samples =  
-        av_rescale_rnd(src_nb_samples, out_sample_rate, audio_dec_ctx->sample_rate, AV_ROUND_UP);  
-    if (max_dst_nb_samples <= 0)  
-    {  
-        printf("av_rescale_rnd error \n");  
-        return -1;  
-    }  
-  
-    dst_nb_channels = av_get_channel_layout_nb_channels(dst_ch_layout);  
-    ret = av_samples_alloc_array_and_samples(&dst_data, &dst_linesize, dst_nb_channels,  
-        dst_nb_samples, (enum AVSampleFormat)out_sample_fmt, 0);  
-    if (ret < 0)  
-    {  
-        printf("av_samples_alloc_array_and_samples error \n");  
-        return -1;  
-    }  
-  
-  
-    dst_nb_samples = av_rescale_rnd(swr_get_delay(swr_ctx, audio_dec_ctx->sample_rate) +  
-        src_nb_samples, out_sample_rate, audio_dec_ctx->sample_rate,AV_ROUND_UP);  
-    if (dst_nb_samples <= 0)  
-    {  
-        printf("av_rescale_rnd error \n");  
-        return -1;  
-    }  
-    if (dst_nb_samples > max_dst_nb_samples)  
-    {  
-        av_free(dst_data[0]);  
-        ret = av_samples_alloc(dst_data, &dst_linesize, dst_nb_channels,  
-            dst_nb_samples, (enum AVSampleFormat)out_sample_fmt, 1);  
-        max_dst_nb_samples = dst_nb_samples;  
-    }  
-  
-    data_size = av_samples_get_buffer_size(NULL, audio_dec_ctx->channels,  
-        pAudioDecodeFrame->nb_samples,  
-        audio_dec_ctx->sample_fmt, 1);  
-    if (data_size <= 0)  
-    {  
-        printf("av_samples_get_buffer_size error \n");  
-        return -1;  
-    }  
-    resampled_data_size = data_size;  
-      
-    if (swr_ctx)  
-    {  
-        ret = swr_convert(swr_ctx, dst_data, dst_nb_samples,   
-            (const uint8_t **)pAudioDecodeFrame->data, pAudioDecodeFrame->nb_samples);  
-        if (ret <= 0)  
-        {  
-            printf("swr_convert error \n");  
-            return -1;  
-        }  
-  
-        resampled_data_size = av_samples_get_buffer_size(&dst_linesize, dst_nb_channels,  
-            ret, (enum AVSampleFormat)out_sample_fmt, 1);  
-        if (resampled_data_size <= 0)  
-        {  
-            printf("av_samples_get_buffer_size error \n");  
-            return -1;  
-        }  
-    }  
-    else   
-    {  
-        printf("swr_ctx null error \n");  
-        return -1;  
-    }  
-  
-    //将值返回去  
-    memcpy(out_buf,dst_data[0],resampled_data_size);  
-  
-    if (dst_data)  
-    {  
-        av_freep(&dst_data[0]);  
-    }  
-    av_freep(&dst_data);  
-    dst_data = NULL;  
-  
-    if (swr_ctx)  
-    {  
-        swr_free(&swr_ctx);  
-    }  
-    return resampled_data_size;  
-}  
 
 
 #define AVCODE_MAX_AUDIO_FRAME_SIZE	192000  /* 1 second of 48khz 32bit audio */
@@ -212,6 +57,23 @@ int main( int argc, char *argv[] )
 	uint8_t	audioBuf[(AVCODE_MAX_AUDIO_FRAME_SIZE * 3) / 2];
 	AVFrame         wantedFrame;
 	SwrContext	*pPcmSwrCtx	= NULL;
+
+
+	int64_t src_ch_layout = AV_CH_LAYOUT_STEREO, dst_ch_layout = AV_CH_LAYOUT_STEREO;
+    int src_rate = 48000, dst_rate = 96000;
+    uint8_t **src_data = NULL, **dst_data = NULL;
+    int src_nb_channels = 0, dst_nb_channels = 0;
+    int src_linesize, dst_linesize;
+    int src_nb_samples = 1024, dst_nb_samples, max_dst_nb_samples;
+    enum AVSampleFormat src_sample_fmt = AV_SAMPLE_FMT_S16, dst_sample_fmt = AV_SAMPLE_FMT_S16;
+    const char *dst_filename = NULL;
+    FILE *dst_file;
+    int dst_bufsize;
+    const char *fmt;
+    double t;
+    int ret;
+
+	
 
 	if ( argc < 2 )
 	{
@@ -254,7 +116,7 @@ int main( int argc, char *argv[] )
     }  
 
     FILE * fS32Px2 = fopen("f32lex2.pcm","wb+");  
-    FILE * fS16x2 = fopen("s16lex2.pcm","wb+");  
+    FILE * fS16x2 = fopen("s16lex2-96000.pcm","wb+");  
     FILE * fS16x2_2 = fopen("s16lex2_2.pcm","wb+");  
     while( av_read_frame(pFormatCtx, &packet) >= 0 ) 
     {  
@@ -282,41 +144,83 @@ int main( int argc, char *argv[] )
 			int bytesPerSample = av_get_bytes_per_sample((enum AVSampleFormat)pFrame->format);
 			SavePcmS32px2(pFrame, bytesPerSample, fS32Px2);
 
-			if ( pPcmSwrCtx != NULL )
-			{
-				swr_free( &pPcmSwrCtx );
-				pPcmSwrCtx = NULL;
-			}
+			
 			
 			if ( !pPcmSwrCtx)
 			{
-					// 设置参数，供解码时候用, swr_alloc_set_opts的in部分参数
-				wantedFrame.format 	= AV_SAMPLE_FMT_S16;				//只有sample交替
-				wantedFrame.sample_rate	= 44100;						// 48000 这样直接重采样有噪音
-				wantedFrame.channel_layout = av_get_default_channel_layout(2);
-				wantedFrame.channels		= 2;
+				/* create resampler context */
+			    pPcmSwrCtx = swr_alloc();
+			    if (!pPcmSwrCtx) {
+			        fprintf(stderr, "Could not allocate resampler context\n");
+			        ret = AVERROR(ENOMEM);
+			        break;
+			    }
+    			/* set options */
+    			src_ch_layout = pFrame->channel_layout;
+    			src_rate = pFrame->sample_rate;
+    			src_sample_fmt = (enum AVSampleFormat)(pFrame->format);
+			    av_opt_set_int(pPcmSwrCtx, "in_channel_layout",    src_ch_layout, 0);
+			    av_opt_set_int(pPcmSwrCtx, "in_sample_rate",       src_rate, 0);
+			    av_opt_set_sample_fmt(pPcmSwrCtx, "in_sample_fmt", src_sample_fmt, 0);
 
-				pPcmSwrCtx = swr_alloc_set_opts( NULL,
-								  wantedFrame.channel_layout, (enum AVSampleFormat) (wantedFrame.format), wantedFrame.sample_rate,
-								  pFrame->channel_layout, (enum AVSampleFormat) (pFrame->format), pFrame->sample_rate,
-								  0, NULL );
-				// 初始化
-				if ( pPcmSwrCtx == NULL || swr_init( pPcmSwrCtx ) < 0 )
-				{
-					fprintf( stderr, "swr_init error\n" );
-					break;
-				}
+			    av_opt_set_int(pPcmSwrCtx, "out_channel_layout",    dst_ch_layout, 0);
+			    av_opt_set_int(pPcmSwrCtx, "out_sample_rate",       dst_rate, 0);
+			    av_opt_set_sample_fmt(pPcmSwrCtx, "out_sample_fmt", dst_sample_fmt, 0);
+
+			    /* initialize the resampling context */
+			    if ((ret = swr_init(pPcmSwrCtx)) < 0) {
+			        fprintf(stderr, "Failed to initialize the resampling context\n");
+			        break;
+			    }
+			    src_nb_samples = pFrame->nb_samples;
+			    max_dst_nb_samples = dst_nb_samples =  av_rescale_rnd(src_nb_samples, dst_rate, src_rate, AV_ROUND_UP);
+			    dst_nb_channels = av_get_channel_layout_nb_channels(dst_ch_layout);
+			    printf("max_dst_nb_samples = %d, dst_nb_channels = %d\n", max_dst_nb_samples);
+			    
 			}
 
+			dst_nb_samples = av_rescale_rnd(swr_get_delay(pPcmSwrCtx, pFrame->sample_rate) +  src_nb_samples, 
+								dst_rate, 
+								pFrame->sample_rate, 
+								AV_ROUND_UP);
+			printf("dst_nb_samples = %d\n", dst_nb_samples);					
+	        if (dst_nb_samples > max_dst_nb_samples) {
+	            printf("dst_nb_samples:%d > max_dst_nb_samples:%d\n", dst_nb_samples, max_dst_nb_samples);
+	            max_dst_nb_samples = dst_nb_samples;
+	        }
+        
 			uint8_t *pAudioBuf = audioBuf;
-			int convert_len = swr_convert(pPcmSwrCtx,	(uint8_t * *) &pAudioBuf,  AVCODE_MAX_AUDIO_FRAME_SIZE,
-						   (const uint8_t * *) pFrame->data, pFrame->nb_samples);
-							   
-			int pcmDataLen = wantedFrame.channels * convert_len * av_get_bytes_per_sample( (enum AVSampleFormat) (wantedFrame.format));
-			SavePcmS16x2(pAudioBuf, pcmDataLen, fS16x2);
-
-			pcmDataLen = AudioResampling(pCodecCtx, pFrame, AV_SAMPLE_FMT_S16, 2, 48000, pAudioBuf);
-			SavePcmS16x2(pAudioBuf, pcmDataLen, fS16x2_2);
+			/* convert to destination format */
+	        ret = swr_convert(pPcmSwrCtx, (uint8_t * *) &pAudioBuf, dst_nb_samples, 
+	        		(const uint8_t **)(const uint8_t * *) pFrame->data, pFrame->nb_samples);
+	        if (ret < 0) {
+	            fprintf(stderr, "Error while converting\n");
+	            break;
+	        }
+	        dst_bufsize = av_samples_get_buffer_size(&dst_linesize, dst_nb_channels,
+	                                                 ret, dst_sample_fmt, 1);
+	       	printf("ret = %d, dst_bufsize = %d\n", ret, dst_bufsize);	                                          
+	        if (dst_bufsize < 0) {
+	            fprintf(stderr, "Could not get sample buffer size\n");
+	            break;
+	        }
+	        printf("in:%d out:%d\n",  src_nb_samples, ret);
+			
+	
+			SavePcmS16x2(pAudioBuf, dst_bufsize, fS16x2);
+			/*
+			44100->48000
+			in:1024 out:1115
+			dst_nb_samples = 1132
+			ret = 1115, dst_bufsize = 4460
+			in:1024 out:1115
+			dst_nb_samples = 1131
+			ret = 1114, dst_bufsize = 4456
+			in:1024 out:1114
+			dst_nb_samples = 1132
+			ret = 1115, dst_bufsize = 4460
+			*/
+	
         }  
          
   
@@ -339,8 +243,11 @@ int main( int argc, char *argv[] )
     avformat_close_input(&pFormatCtx);  
     
     printf("sws_freeContext(pPcmSwrCtx)\n");
-    if(pPcmSwrCtx)
-    swr_free(&pPcmSwrCtx);
+    if ( pPcmSwrCtx != NULL )
+	{
+		swr_free( &pPcmSwrCtx );
+		pPcmSwrCtx = NULL;
+	}
     
 	printf("return 0\n");
 	return 0;

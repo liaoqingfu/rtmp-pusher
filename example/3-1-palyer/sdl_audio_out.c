@@ -58,7 +58,7 @@ void audio_callback( void *userdata, Uint8 *stream, int len )
 
 	/* 初始化stream，每次都要。 */
 	SDL_memset( stream, 0, len );
-
+	printf("audio_callback len = %d\n", len);
 	while ( len > 0 )
 	{
 		if ( audio_buf_index >= audio_buf_size )
@@ -225,6 +225,7 @@ int audio_decode_frame( AVCodecContext *pAudioCodecCtx,
 						   AVCODE_MAX_AUDIO_FRAME_SIZE,
 						   (const uint8_t * *) frame->data,
 						   frame->nb_samples );
+			printf("decode len = %d, convert_len = %d\n", decode_len, convert_len);						   
 			/*
 			 * printf("decode len = %d, convert_len = %d\n", decode_len, convert_len);
 			 * 解码了多少，解码到了哪里
@@ -271,6 +272,7 @@ int SDL2AudioOutInit(AVCodecContext	*pAudioCodecCtx)
 	wantFrame.channel_layout	= av_get_default_channel_layout( spec.channels );
 	wantFrame.channels		= spec.channels;
 
+	printf("wantFrame.sample_rate = %d\n", wantFrame.sample_rate);
 	/*
 	 * 可以用SDL_PauseAudioDevice()代替,目前用的这个应该是旧的。
 	 * 0是不暂停，非零是暂停
