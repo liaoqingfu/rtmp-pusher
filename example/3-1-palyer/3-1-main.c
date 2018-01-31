@@ -208,15 +208,14 @@ int main( int argc, char *argv[] )
 	{
 		if ( packet.stream_index == videoStream ) /* 是一个视频帧 */
 		{
-			/* Decode video frame */
-			avcodec_decode_video2( pVideoCodecCtx, pVideoFrame, &frameFinished,
-					       &packet );
-			/* Did we get a video frame? */
+			// 解视频帧
+			avcodec_decode_video2( pVideoCodecCtx, pVideoFrame, &frameFinished, &packet );
+			// 确定已经获取到视频帧
 			if ( frameFinished )
 			{
 				SDL2Display(pVideoFrame, pVideoCodecCtx->height);
 			}
-			/* Free the packet that was allocated by av_read_frame */
+			// 释放packet占用的内存 
 			av_free_packet( &packet );
 		}
 		else if ( packet.stream_index == audioStream )         /* 是一个音频帧 */
