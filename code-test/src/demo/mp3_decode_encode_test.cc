@@ -74,7 +74,7 @@ int mp3DecodeEncode(const char *src_file, const char *dst_file)
     }
 
     AudioEncoder *mp3Encoder = new Mp3Encoder();
-    if(mp3Encoder->Init(44100, 2, 192000) != 0)
+    if(mp3Encoder->Init(44100, 2, 128000) != 0)
     {
         fprintf(stderr, "mp3Encoder->Init(44100, 2, 128000) failed\n");
 		return -1;
@@ -132,7 +132,7 @@ syncWordSearch:
                 }*/
                 ++nFrames;
                 //printf("Found frame %d at offset = %ld B\nHeader Bits:\n", nFrames, ftell(ifMp3));
-                usleep(10000);       
+                //usleep(10000);       
                 //get the rest of the header:
                 ucHeaderByte3=getc(ifMp3);
                 ucHeaderByte4=getc(ifMp3);
@@ -192,7 +192,6 @@ syncWordSearch:
 							fwrite( mp3RawBuffer, 1, nFrameLength, outMp3File ); 
 		               	}
 
-						
 						remainPcmByte = OUTBUFF_AAC_PCM_FRAME - aacPcmIndex;			// 还差多少数据
 						//printf("1 remainPcmByte size = %d, aacPcmIndex = %d\n", remainPcmByte, aacPcmIndex);
 						memcpy(&aacPcmBuffer[aacPcmIndex], mp3PcmBuffer, remainPcmByte);
@@ -206,7 +205,7 @@ syncWordSearch:
 		               	else
 		               	{
 							printf("1 write a aac frame failed\n");
-		               	}
+		               	}	
 		               	aacPcmIndex = OUTBUFF_MP3_PCM_FRAME - remainPcmByte;		//MP3 buffer剩余的数据
 
 		               	//printf("2 remainPcmByte size = %d, aacPcmIndex = %d\n", remainPcmByte, aacPcmIndex);
