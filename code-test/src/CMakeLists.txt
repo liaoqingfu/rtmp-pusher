@@ -37,6 +37,6 @@ SET(Boost_USE_MULTITHREADED      ON)
 
 SET(Boost_LIBRARIES boost_system boost_date_time)
 
-set(PROJECT_LIBS  m fdk-aac mad)
+set(PROJECT_LIBS  m fdk-aac mp3lame mpg123 )
 add_executable(code-test ${SRC_LIST})
 target_link_libraries(code-test ${PROJECT_LIBS})

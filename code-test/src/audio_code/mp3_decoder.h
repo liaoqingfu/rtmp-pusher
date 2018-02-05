@@ -2,7 +2,8 @@
 #define _MP3_DECODER_H_
 
 #include "audio_decoder.h"
-#include <mad.h>
+#include <mpg123.h>
+
 
 namespace AudioCode
 {
@@ -17,10 +18,7 @@ public:
 	
 
 private:
-	struct mad_synth synth_;
-	struct mad_frame frame_;
-	struct mad_stream stream_;
-
+	mpg123_handle *mpg123Handle_ = nullptr;
 };
 }
 #endif
