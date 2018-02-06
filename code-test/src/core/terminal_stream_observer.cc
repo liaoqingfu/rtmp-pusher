@@ -56,12 +56,15 @@ void TerminalStreamObserver::NotifyAll(Terminal::ETerminalType terminalType)
 	MutexLockGuard lock(mutex_);
 
 	// 终端调用自己的函数发送数据
-
+	//printf("NotifyAll1 \n");
 	// 每个终端保存自己的数据，并使用线程池来发送数据
 	for (auto mapItem = terminalMap_.begin(); mapItem != terminalMap_.end(); ++mapItem) 
 	{  
-		if(terminalType == mapItem->second->GetTerminalType())
+		Terminal::ETerminalType type = mapItem->second->GetTerminalType();
+		//printf("NotifyAll2 terminalType = %d \n", type);
+		if(terminalType == type)
         {
+        	//printf("NotifyAll2 \n");
         	mapItem->second->Send(frameBuf_);
         }	
     }  
@@ -69,18 +72,30 @@ void TerminalStreamObserver::NotifyAll(Terminal::ETerminalType terminalType)
 
 void TerminalStreamObserver::Loop()
 {
+	int ret;
 	while(!m_exiting)
 	{
-		if(audioFramePool_->TakeFrame(AudioFramePool::eAudioMp3, frameBuf_) == 0)
+		ret = audioFramePool_->TakeFrame(AudioFramePool::eAudioMp3, frameBuf_);
+		if(ret == 0)
 		{
 			NotifyAll(Terminal::eTerminalMp3);
 			frameBuf_.reset();
 		}
-		else if(audioFramePool_->TakeFrame(AudioFramePool::eAudioAac, frameBuf_) == 0)
+		else
+		{
+			printf("ret1 = %d \n", ret);
+		}
+		ret = audioFramePool_->TakeFrame(AudioFramePool::eAudioAac, frameBuf_);
+		if(ret == 0)
 		{
 			NotifyAll(Terminal::eTerminalAac);
 			frameBuf_.reset();
 		}
+		else
+		{
+			printf("ret2 = %d \n", ret);
+		}
+		usleep(22000);
 	}
 }
 

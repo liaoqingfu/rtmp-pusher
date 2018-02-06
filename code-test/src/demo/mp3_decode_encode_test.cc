@@ -16,10 +16,11 @@
 #include "audio_encoder.h"
 #include "mp3_encoder.h"
 #include "aac_encoder.h"
-#include "bounded_blocking_queue.h"
+#include "bounded_queue.h"
 #include "audio_frame_pool.h"
-
 #include "shared_buffer.h"
+#include "terminal_server_thread.h"
+#include "terminal_stream_observer.h"
 
 
 using namespace AudioCode;
@@ -68,14 +69,28 @@ int mp3DecodeEncode(const char *src_file, const char *dst_file)
     outPcmFile		= fopen( "16.pcm", "wb" );
 	outAacFile		= fopen( "16.aac", "wb" );
 
-   
- 	
+
+   	
+ 	// 音频帧池
 	std::shared_ptr<AudioFramePool> audioFramePool = std::make_shared<AudioFramePool>(1);
-	audioFramePool->RegisterFramesPool(AudioFramePool::eAudioMp3, 5);
-	audioFramePool->RegisterFramesPool(AudioFramePool::eAudioAac, 5);
-	std::shared_ptr<BoundedBlockingQueue<Buffer::BufferPtr>> audioFrameQueue 
-    				=  std::make_shared<BoundedBlockingQueue<Buffer::BufferPtr>>(10);
-    				
+	printf("std::make_shared<AudioFramePool>(1)\n");
+	audioFramePool->RegisterFramesPool(AudioFramePool::eAudioMp3, 10);
+	printf("RegisterFramesPool(AudioFramePool::eAudioMp3, 10)\n");
+	audioFramePool->RegisterFramesPool(AudioFramePool::eAudioAac, 10);
+	printf("RegisterFramesPool(AudioFramePool::eAudioAac, 10)\n");
+
+	// 维护终端
+	TerminalStreamObserver::TerminalObserverPtr terminalObserver 
+			= std::make_shared<TerminalStreamObserver>(audioFramePool);
+	
+	
+ 	// 创建服务器
+	TerminalServerThread::TerminalServerPtr terminalServer 
+			= std::make_shared<TerminalServerThread>(terminalObserver, 9010);	
+	terminalServer->startLoop();
+
+	terminalObserver->startLoop();			// 启动服务	
+	
  	unsigned char poutbuf;
  	
  	int size;
@@ -131,6 +146,10 @@ int mp3DecodeEncode(const char *src_file, const char *dst_file)
     float fBitRateSum=0;
     long int lnPreviousFramePosition;
 	aacPcmIndex = 0;
+	while(0)
+	{
+		usleep(100000);
+	}
 syncWordSearch:
     while( ftell(ifMp3) < lnNumberOfBytesInFile)
     {
@@ -141,21 +160,13 @@ syncWordSearch:
             unsigned char ucByte2LowerNibble = ucHeaderByte2 & 0xF0;
             if( ucByte2LowerNibble == 0xF0 || ucByte2LowerNibble == 0xE0 )
             {
-                /*if(nFrames>1){
-                    printf("Previous Frame Length: %ld\n\n",ftell(ifMp3)-2 -lnPreviousFramePosition);
-                }*/
                 ++nFrames;
                 //printf("Found frame %d at offset = %ld B\nHeader Bits:\n", nFrames, ftell(ifMp3));
-                //usleep(10000);       
+                usleep(20000);       
                 //get the rest of the header:
                 ucHeaderByte3=getc(ifMp3);
                 ucHeaderByte4=getc(ifMp3);
-                //print the header:
-                //printBits(sizeof(ucHeaderByte1),&ucHeaderByte1);
-                //printBits(sizeof(ucHeaderByte2),&ucHeaderByte2);
-                //printBits(sizeof(ucHeaderByte3),&ucHeaderByte3);
-               	// printBits(sizeof(ucHeaderByte4),&ucHeaderByte4);
-                //get header info:
+   
                 int nFrameSamplingFrequency = findFrameSamplingFrequency(ucHeaderByte3);
                 int nFrameBitRate = findFrameBitRate(ucHeaderByte3);
                 int nMpegVersionAndLayer = findMpegVersionAndLayer(ucHeaderByte2);
@@ -197,8 +208,16 @@ syncWordSearch:
 					}
 					else 
 					{
-		               	//printf("write a frame size = %d, pcm size = %d, BitRate = %d\n", nFrameLength, size, nFrameBitRate);
-		               	//fwrite( mp3PcmBuffer, 1, size, outPcmFile);
+		            	Buffer::BufferPtr mp3Buff(Buffer::CreateInstance(nFrameLength));
+				        if(!mp3Buff->Add(mp3RawBuffer, nFrameLength))
+						{
+							printf("new buffer failed");
+							
+				        }
+				        static int count = 0;
+				        //printf("audioFrameQueue.put count1 = %d\n", ++count);
+					 	audioFramePool->PutFrame(AudioFramePool::eAudioMp3, mp3Buff);
+						//printf("%s(%d)\n", __FUNCTION__, __LINE__);
 		               	nFrameLength = OUTBUFF_MP3_RAW_FRAME;
 		               	if(mp3Encoder->Encode(mp3PcmBuffer, size, mp3RawBuffer, nFrameLength) == 0)
 		               	{
@@ -206,18 +225,8 @@ syncWordSearch:
 							fwrite( mp3RawBuffer, 1, nFrameLength, outMp3File ); 
 		               	}
 
-		               	Buffer::BufferPtr buff(Buffer::CreateInstance(size));
-		               //	printf("Buffer::CreateInstance\n");
-				        if(!buff->Add(mp3PcmBuffer,size))
-						{
-							printf("new buffer failed");
-							
-				        }
-				        static int count = 0;
-				        printf("audioFrameQueue.put count = %d\n", ++count);
-				        audioFrameQueue->put(1, buff);
-						audioFramePool->PutFrame(AudioFramePool::eAudioMp3, buff);
-						
+		               
+						//printf("%s(%d)\n", __FUNCTION__, __LINE__);
 						remainPcmByte = OUTBUFF_AAC_PCM_FRAME - aacPcmIndex;			// 还差多少数据
 						//printf("1 remainPcmByte size = %d, aacPcmIndex = %d\n", remainPcmByte, aacPcmIndex);
 						memcpy(&aacPcmBuffer[aacPcmIndex], mp3PcmBuffer, remainPcmByte);
@@ -226,7 +235,14 @@ syncWordSearch:
 		               	if(aacEncoder->Encode(aacPcmBuffer, OUTBUFF_AAC_PCM_FRAME, aacRawBuffer, nFrameLength) == 0)
 		               	{
 							fwrite( aacRawBuffer, 1, nFrameLength, outAacFile ); 
-							//printf("1 write a aac frame size = %d\n", nFrameLength);
+							Buffer::BufferPtr aacBuff(Buffer::CreateInstance(nFrameLength));
+					        if(!aacBuff->Add(aacRawBuffer,nFrameLength))
+							{
+								printf("new buffer failed");
+								
+					        }
+					        //printf("%s(%d)\n", __FUNCTION__, __LINE__);
+							audioFramePool->PutFrame(AudioFramePool::eAudioAac, aacBuff);
 		               	}
 		               	else
 		               	{
@@ -244,7 +260,14 @@ syncWordSearch:
 							if(aacEncoder->Encode((const unsigned char *)aacPcmBuffer, OUTBUFF_AAC_PCM_FRAME, aacRawBuffer, nFrameLength) == 0)
 			               	{
 								fwrite( aacRawBuffer, 1, nFrameLength, outAacFile); 
-								//printf("2 write a aac frame size = %d\n", nFrameLength);
+								Buffer::BufferPtr aacBuff(Buffer::CreateInstance(nFrameLength));
+						        if(!aacBuff->Add(aacRawBuffer,nFrameLength))
+								{
+									printf("new buffer failed");
+									
+						        }
+						        //printf("%s(%d)\n", __FUNCTION__, __LINE__);
+								audioFramePool->PutFrame(AudioFramePool::eAudioAac, aacBuff);
 			               	}
 			               	else
 			               	{
@@ -255,7 +278,7 @@ syncWordSearch:
 	               	}
 
 	               	static int forBreakCount = 0;
-	               	if(forBreakCount++ >= 100)
+	                if(forBreakCount++ >= 50)
 	               		break;
                	}
                	else

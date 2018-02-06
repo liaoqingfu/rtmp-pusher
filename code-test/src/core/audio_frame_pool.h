@@ -1,7 +1,7 @@
 #ifndef _AUDIO_FRAME_POOL_
 #define _AUDIO_FRAME_POOL_
 
-#include "bounded_blocking_queue.h"
+#include "bounded_queue.h"
 #include "mutex.h"
 
 #include "shared_buffer.h"
@@ -13,7 +13,7 @@ class AudioFramePool
 {
 public:
 	typedef  std::shared_ptr<AudioFramePool> AudioFramePoolPtr;
-	typedef  std::shared_ptr<BoundedBlockingQueue<Buffer::BufferPtr>> FrameQueuePtr;
+	typedef  std::shared_ptr<BoundedQueue<Buffer::BufferPtr>> FrameQueuePtr;
 	typedef enum {eAudioMp3 = 0,  eAudioAac}EAudioType;
 	explicit AudioFramePool(int round);
 	~AudioFramePool();
@@ -23,7 +23,7 @@ public:
 	int TakeFrame(EAudioType audioType, Buffer::BufferPtr &buf);
 private:
 	int round_ = 1;				// round_  «∑Ò—≠ª∑∏≤∏«
-	typedef  std::map<EAudioType, std::shared_ptr<BoundedBlockingQueue<Buffer::BufferPtr>>> FramePoolMap;
+	typedef  std::map<EAudioType, std::shared_ptr<BoundedQueue<Buffer::BufferPtr>>> FramePoolMap;
 
 	FramePoolMap framePoolMap_;
 	mutable MutexLock mutex_;

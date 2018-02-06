@@ -23,9 +23,9 @@ int AudioFramePool::RegisterFramesPool(EAudioType audioType, int maxFrames)	// ×
 	else
 	{
 		//ÐÎÊ½1
-		//FrameQueuePtr frameQueue(new BoundedBlockingQueue<Buffer::BufferPtr>(maxFrames)); 
+		//FrameQueuePtr frameQueue(new BoundedQueue<Buffer::BufferPtr>(maxFrames)); 
 		// ÐÎÊ½2
-		FrameQueuePtr frameQueue = std::make_shared<BoundedBlockingQueue<Buffer::BufferPtr>>(maxFrames); 	
+		FrameQueuePtr frameQueue = std::make_shared<BoundedQueue<Buffer::BufferPtr>>(maxFrames, false); 	
 		if(frameQueue != nullptr)
 		{
 			framePoolMap_.insert(std::make_pair(audioType, frameQueue));  
@@ -53,16 +53,22 @@ int AudioFramePool::UnregisterFramesPool(EAudioType audioType)
 
 int AudioFramePool::PutFrame(EAudioType audioType, Buffer::BufferPtr &buf)
 {
-	MutexLockGuard lock(mutex_);
+ 	MutexLockGuard lock(mutex_);
 	auto mapItem = framePoolMap_.find(audioType);
 	if(mapItem != framePoolMap_.end())
 	{
-		//Buffer::BufferPtr buff(Buffer::CreateInstance(100));
-		return mapItem->second->put(round_, buf);		
+		if(BoundedQueue<Buffer::BufferPtr>::eOk == mapItem->second->put(round_, buf))
+		{
+			return 0;
+		}
+		else 
+		{
+			return 1;				
+		}
 	}
 	else
 	{
-		return 1;		// ²»´æÔÚ
+		return -1;		// ²»´æÔÚ
 	}
 }
 
@@ -72,8 +78,16 @@ int AudioFramePool::TakeFrame(EAudioType audioType, Buffer::BufferPtr &buf)
 	auto mapItem = framePoolMap_.find(audioType);
 	if(mapItem != framePoolMap_.end())
 	{
-		buf = mapItem->second->take();	
-		return 0;
+		Buffer::BufferPtr tmp;
+		//buf = mapItem->second->take();	
+		if(BoundedQueue<Buffer::BufferPtr>::eOk == mapItem->second->take(buf))
+		{
+			return 0;
+		}
+		else 
+		{
+			return 1;				
+		}
 	}
 	else
 	{

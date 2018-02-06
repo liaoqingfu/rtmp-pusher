@@ -12,6 +12,7 @@ using namespace std;
 class TerminalStreamObserver// : public Thread
 {
 public:
+	typedef std::shared_ptr<TerminalStreamObserver> TerminalObserverPtr;;
 	TerminalStreamObserver(AudioFramePool::AudioFramePoolPtr &audioFramePool);
 	virtual ~TerminalStreamObserver();
 	int RegisterTerminal(int id, std::shared_ptr<Terminal> &terminal);			// 注册帧池 观察者模式
