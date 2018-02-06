@@ -9,7 +9,7 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 #设置可执行程序路径
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 #设置子目录
-set(SUB_DIR_LIST audio_code demo)
+set(SUB_DIR_LIST audio_code base core demo)
 
 #使用C++编译器
 SET(CMAKE_C_COMPILER g++)			
@@ -37,6 +37,6 @@ SET(Boost_USE_MULTITHREADED      ON)
 
 SET(Boost_LIBRARIES boost_system boost_date_time)
 
-set(PROJECT_LIBS  m fdk-aac mp3lame mpg123 )
+set(PROJECT_LIBS  m fdk-aac mp3lame mpg123 pthread)
 add_executable(code-test ${SRC_LIST})
 target_link_libraries(code-test ${PROJECT_LIBS})

@@ -8,15 +8,22 @@
 #include <pthread.h>
 #include <time.h>
 #include <sys/time.h>
+#include <memory> // shared_ptr 
+
 #include "audio_decoder.h"
 #include "mp3_decoder.h"
 
 #include "audio_encoder.h"
 #include "mp3_encoder.h"
 #include "aac_encoder.h"
+#include "bounded_blocking_queue.h"
+#include "audio_frame_pool.h"
+
+#include "shared_buffer.h"
+
 
 using namespace AudioCode;
-
+using namespace std;
 
 
 #define DMX_ANC_BUFFSIZE	128
@@ -60,27 +67,34 @@ int mp3DecodeEncode(const char *src_file, const char *dst_file)
     outMp3File		= fopen( dst_file, "wb" );
     outPcmFile		= fopen( "16.pcm", "wb" );
 	outAacFile		= fopen( "16.aac", "wb" );
-    
+
+   
  	
+	std::shared_ptr<AudioFramePool> audioFramePool = std::make_shared<AudioFramePool>(1);
+	audioFramePool->RegisterFramesPool(AudioFramePool::eAudioMp3, 5);
+	audioFramePool->RegisterFramesPool(AudioFramePool::eAudioAac, 5);
+	std::shared_ptr<BoundedBlockingQueue<Buffer::BufferPtr>> audioFrameQueue 
+    				=  std::make_shared<BoundedBlockingQueue<Buffer::BufferPtr>>(10);
+    				
  	unsigned char poutbuf;
  	
  	int size;
 
- 	AudioDecoder *mp3Decoder = new Mp3Decoder();
+ 	std::shared_ptr<AudioDecoder>  mp3Decoder = std::make_shared<Mp3Decoder>();
    	if(mp3Decoder->Init(1) != 0)
    	{
         fprintf(stderr, "mp3Decoder->Init(1) failed\n");
 		return -1;
     }
 
-    AudioEncoder *mp3Encoder = new Mp3Encoder();
+    std::shared_ptr<AudioEncoder> mp3Encoder = std::make_shared<Mp3Encoder>();
     if(mp3Encoder->Init(44100, 2, 128000) != 0)
     {
         fprintf(stderr, "mp3Encoder->Init(44100, 2, 128000) failed\n");
 		return -1;
     }
 
-    AudioEncoder *aacEncoder = new AacEncoder();
+    std::shared_ptr<AudioEncoder> aacEncoder = std::make_shared<AacEncoder>();
     if(aacEncoder->Init(44100, 2, 192000) != 0)
     {
         fprintf(stderr, "mp3Encoder->Init(44100, 2, 192000) failed\n");
@@ -192,6 +206,18 @@ syncWordSearch:
 							fwrite( mp3RawBuffer, 1, nFrameLength, outMp3File ); 
 		               	}
 
+		               	Buffer::BufferPtr buff(Buffer::CreateInstance(size));
+		               //	printf("Buffer::CreateInstance\n");
+				        if(!buff->Add(mp3PcmBuffer,size))
+						{
+							printf("new buffer failed");
+							
+				        }
+				        static int count = 0;
+				        printf("audioFrameQueue.put count = %d\n", ++count);
+				        audioFrameQueue->put(1, buff);
+						audioFramePool->PutFrame(AudioFramePool::eAudioMp3, buff);
+						
 						remainPcmByte = OUTBUFF_AAC_PCM_FRAME - aacPcmIndex;			// 还差多少数据
 						//printf("1 remainPcmByte size = %d, aacPcmIndex = %d\n", remainPcmByte, aacPcmIndex);
 						memcpy(&aacPcmBuffer[aacPcmIndex], mp3PcmBuffer, remainPcmByte);
@@ -227,6 +253,10 @@ syncWordSearch:
 		               	}
 		               	
 	               	}
+
+	               	static int forBreakCount = 0;
+	               	if(forBreakCount++ >= 100)
+	               		break;
                	}
                	else
                	{
@@ -243,12 +273,6 @@ syncWordSearch:
 	fclose(outPcmFile);
 	fclose(outAacFile);
 
-	if(mp3Decoder)
-		delete mp3Decoder;
-	if(aacEncoder)
-		delete aacEncoder;	
-	if(mp3Encoder)
-		delete mp3Encoder;	
     return 0;
 }
 
