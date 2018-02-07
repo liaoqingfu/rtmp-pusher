@@ -8,7 +8,22 @@ AudioFramePool::AudioFramePool(int round)
 }
 AudioFramePool::~AudioFramePool()
 {
-
+	// Ïú»Ù¶ÓÁÐ
+	MutexLockGuard lock(mutex_);
+	std::map<EAudioType, BoundedQueue *>::iterator
+		mapItem = framePoolMap_.find(eAudioMp3);
+	if(mapItem != framePoolMap_.end())
+	{
+		delete (mapItem->second);
+		printf("~AudioFramePool delete eAudioMp3 framequeue\n");
+	}
+	
+	mapItem = framePoolMap_.find(eAudioAac);
+	if(mapItem != framePoolMap_.end())
+	{
+		delete (mapItem->second);
+		printf("~AudioFramePool delete eAudioAac framequeue\n");
+	}
 }
 int AudioFramePool::RegisterFramesPool(EAudioType audioType, int maxFrames)	// ×¢²áÖ¡³Ø
 {
@@ -25,7 +40,7 @@ int AudioFramePool::RegisterFramesPool(EAudioType audioType, int maxFrames)	// ×
 		//ÐÎÊ½1
 		//FrameQueuePtr frameQueue(new BoundedQueue<Buffer::BufferPtr>(maxFrames)); 
 		// ÐÎÊ½2
-		FrameQueuePtr frameQueue = std::make_shared<BoundedQueue<Buffer::BufferPtr>>(maxFrames, false); 	
+		BoundedQueue *frameQueue = new BoundedQueue(maxFrames, false); 	
 		if(frameQueue != nullptr)
 		{
 			framePoolMap_.insert(std::make_pair(audioType, frameQueue));  
@@ -54,10 +69,11 @@ int AudioFramePool::UnregisterFramesPool(EAudioType audioType)
 int AudioFramePool::PutFrame(EAudioType audioType, Buffer::BufferPtr &buf)
 {
  	MutexLockGuard lock(mutex_);
-	auto mapItem = framePoolMap_.find(audioType);
+	std::map<EAudioType, BoundedQueue *>::iterator
+		mapItem = framePoolMap_.find(audioType);
 	if(mapItem != framePoolMap_.end())
 	{
-		if(BoundedQueue<Buffer::BufferPtr>::eOk == mapItem->second->put(round_, buf))
+		if(BoundedQueue::eOk == mapItem->second->put(round_, buf))
 		{
 			return 0;
 		}
@@ -75,12 +91,13 @@ int AudioFramePool::PutFrame(EAudioType audioType, Buffer::BufferPtr &buf)
 int AudioFramePool::TakeFrame(EAudioType audioType, Buffer::BufferPtr &buf)
 {
 	MutexLockGuard lock(mutex_);
-	auto mapItem = framePoolMap_.find(audioType);
+	std::map<EAudioType, BoundedQueue *>::iterator  
+		mapItem = framePoolMap_.find(audioType);
 	if(mapItem != framePoolMap_.end())
 	{
 		Buffer::BufferPtr tmp;
 		//buf = mapItem->second->take();	
-		if(BoundedQueue<Buffer::BufferPtr>::eOk == mapItem->second->take(buf))
+		if(BoundedQueue::eOk == mapItem->second->take(buf))
 		{
 			return 0;
 		}

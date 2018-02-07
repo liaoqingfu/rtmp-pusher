@@ -19,8 +19,8 @@ namespace darren
   	__thread int t_cachedTid = 0;
   	__thread char t_tidString[32];
   	__thread const char* t_threadName = "unknown";
-  	const bool sameType = std::is_same<int, pid_t>::value;
-  	static_assert(sameType, "sameType is false!!!");
+  	//const bool sameType = boost::is_same<int, pid_t>::value;
+  	//static_assert(sameType, "sameType is false!!!");
 	}
 
 	namespace detail
@@ -62,7 +62,7 @@ void CurrentThread::cacheTid()
   {
     t_cachedTid = detail::gettid();
     int n = snprintf(t_tidString, sizeof t_tidString, "%5d ", t_cachedTid);
-    assert(n == 6); (void) n;
+   // assert(n == 6); (void) n;
   }
 }
 

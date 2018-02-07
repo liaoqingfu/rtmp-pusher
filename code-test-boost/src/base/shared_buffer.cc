@@ -1,6 +1,6 @@
 #include "shared_buffer.h"
 #include <string.h>
-
+#include <stdio.h>
 using namespace std;
 
 
@@ -16,13 +16,13 @@ SharedBuffer::~SharedBuffer()
 {
 	if(buf_)
 	{
-	 	//printf("~SharedBuffer count = %d,%d\n",  ++Buffer::DestructorCount, Buffer::ConstructorCount);
+	 	 printf("~SharedBuffer count = %d,%d\n",  ++Buffer::DestructorCount, Buffer::ConstructorCount);
 		delete [] buf_;
 		buf_ = nullptr;
 	}
 	else
 	{
-		printf("~SharedBuffer again\n");
+		//printf("~SharedBuffer again\n");
 	}
 }
 
@@ -39,18 +39,18 @@ bool SharedBuffer::Add(unsigned char *data, int len)
 {
 	if((!buf_) || (!data) || (len < 0))
 	{
-		printf("add failed, buf_ = 0x%x, data = 0x%x, len = %d\n", buf_, data, len);
+		//printf("add failed, buf_ = 0x%x, data = 0x%x, len = %d\n", buf_, data, len);
 		return false;
 	}
 
     if(len + size_ > capacity_)	//ÖØÐÂÉêÇëÄÚ´æ
    	{
-   		printf("new buffer again, len = %d, size_ = %d, capacity_ = %d\n", len, size_, capacity_);
+   		//printf("new buffer again, len = %d, size_ = %d, capacity_ = %d\n", len, size_, capacity_);
 		capacity_ = ((len + size_)>>11 + 1) * 2048;
 		unsigned char *tempBuf  = new unsigned char[capacity_];
 		if(!tempBuf)
 		{
-			printf("new tempBuf faile\n");
+			//printf("new tempBuf faile\n");
 			return false;
 		}
 		memcpy(tempBuf, buf_, size_);

@@ -8,7 +8,7 @@ using namespace std;
 class Terminal
 {
 public:
-	typedef  std::shared_ptr<Terminal> TerminalPtr;
+	typedef  boost::shared_ptr<Terminal> TerminalPtr;
 	typedef enum {eTerminalUnknown, eTerminalMp3, eTerminalAac,} ETerminalType;
 	explicit Terminal(int id, ETerminalType terminalType);		// 必须一开始就指定ID和终端类型
 	virtual ~Terminal();

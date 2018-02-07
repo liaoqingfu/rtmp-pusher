@@ -19,8 +19,8 @@ const int NET_BUF_SIZE = 2048;
 class TerminalServerThread
 {
 public:
-	typedef std::shared_ptr<TerminalServerThread> TerminalServerPtr;
-	TerminalServerThread(TerminalStreamObserver::TerminalObserverPtr &terminalObserver, const int port = 9005);
+	typedef boost::shared_ptr<TerminalServerThread> TerminalServerPtr;
+	TerminalServerThread(TerminalStreamObserver::TerminalObserverPtr terminalObserver, const int port = 9005);
 
 	~TerminalServerThread();
 	void Loop();

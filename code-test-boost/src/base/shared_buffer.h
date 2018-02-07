@@ -23,7 +23,7 @@ protected:
     unsigned char *buf_;
 	int capacity_;
 	int size_;
-	int count = 0;
+	int count;
 };
 #endif
 

@@ -13,7 +13,7 @@ void error_handling(char *message);
 //char s_serv_ip[] ={"192.168.1.122"};
 char s_serv_ip[] ={"127.0.0.1"};
 
-int s_sin_port = 9005;
+int s_sin_port = 9010;
 int s_sleep_time = 10;
 int s_client_num = 20;
 int s_recv_data_len = 12;     //µ¥Î»M
@@ -82,14 +82,13 @@ int main(int argc, char *argv[])
 	int i;
 	pthread_t tidp[100];
 
-	if(argc!=4) {
-		printf("Usage : %s <client_num> <sleep_time><recv_data_len>\n", argv[0]);
+	if(argc!=3) {
+		printf("Usage : %s <client_num> <port>\n", argv[0]);
 		exit(1);
 	}
 	
     s_client_num = atoi(argv[1]);
-	s_sleep_time = atoi(argv[2]);
-    s_recv_data_len  = atoi(argv[3]);
+	s_sin_port = atoi(argv[2]);
 
     for(i = 0; i < s_client_num; i++)
     {

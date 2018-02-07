@@ -1,5 +1,7 @@
 #ifndef _AUDIO_ENCODER_H_
 #define _AUDIO_ENCODER_H_
+#define nullptr NULL
+
 namespace AudioCode
 {
 enum AudioFileType

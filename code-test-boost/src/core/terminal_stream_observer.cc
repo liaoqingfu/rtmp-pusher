@@ -1,7 +1,9 @@
 #include "terminal_stream_observer.h"
+#include <boost/bind.hpp>
+#include <boost/function.hpp>
 
-TerminalStreamObserver::TerminalStreamObserver(AudioFramePool::AudioFramePoolPtr &audioFramePool)
-	:m_thread(std::bind(&TerminalStreamObserver::Loop, this)),
+TerminalStreamObserver::TerminalStreamObserver(AudioFramePool::AudioFramePoolPtr audioFramePool)
+	:m_thread(boost::bind(&TerminalStreamObserver::Loop, this)),
 	audioFramePool_(audioFramePool),
 	m_exiting(false)
 {
@@ -12,15 +14,16 @@ TerminalStreamObserver::~TerminalStreamObserver()
 	m_exiting = true;
   	m_thread.join();
 }
-int TerminalStreamObserver::RegisterTerminal(int id, std::shared_ptr<Terminal> &terminal)		// 注册帧池 观察者模式
+int TerminalStreamObserver::RegisterTerminal(int id, Terminal *terminal)		// 注册帧池 观察者模式
 {
 	int ret = 0;
-	
+	printf("RegisterTerminal terminal = 0x%x, size = %d\n", terminal, terminalMap_.size());
 	MutexLockGuard lock(mutex_);
 	// 先查找是否已经注册
 	if (terminalMap_.find(id) != terminalMap_.end())  
 	{
 		// 说明已经注册过了
+		printf("RegisterTerminal have register1 \n");
 		return 1;
 	}
 	else
@@ -32,9 +35,11 @@ int TerminalStreamObserver::RegisterTerminal(int id, std::shared_ptr<Terminal> &
 		}
 		else
 		{
+			printf("RegisterTerminal have register2 \n");
 			ret = -1;
 		}
 	}	
+	printf("RegisterTerminal ret = %d\n", ret);
 	return ret;	
 
 }
@@ -56,16 +61,16 @@ void TerminalStreamObserver::NotifyAll(Terminal::ETerminalType terminalType)
 	MutexLockGuard lock(mutex_);
 
 	// 终端调用自己的函数发送数据
-	//printf("NotifyAll1 \n");
+	 //printf("NotifyAll1 \n");
 	// 每个终端保存自己的数据，并使用线程池来发送数据
-	for (auto mapItem = terminalMap_.begin(); mapItem != terminalMap_.end(); ++mapItem) 
+	for (std::map<int, Terminal *>::iterator mapItem = terminalMap_.begin(); mapItem != terminalMap_.end(); ++mapItem) 
 	{  
-		Terminal::ETerminalType type = mapItem->second->GetTerminalType();
+		Terminal::ETerminalType type  = mapItem->second->GetTerminalType();
 		//printf("NotifyAll2 terminalType = %d \n", type);
 		if(terminalType == type)
         {
         	//printf("NotifyAll2 \n");
-        	mapItem->second->Send(frameBuf_);
+        	 mapItem->second->Send(frameBuf_);
         }	
     }  
 }
@@ -83,7 +88,7 @@ void TerminalStreamObserver::Loop()
 		}
 		else
 		{
-			//printf("ret1 = %d \n", ret);
+			 //printf("ret1 = %d \n", ret);
 		}
 		ret = audioFramePool_->TakeFrame(AudioFramePool::eAudioAac, frameBuf_);
 		if(ret == 0)
@@ -93,7 +98,7 @@ void TerminalStreamObserver::Loop()
 		}
 		else
 		{
-			//printf("ret2 = %d \n", ret);
+			// printf("ret2 = %d \n", ret);
 		}
 		usleep(22000);
 	}

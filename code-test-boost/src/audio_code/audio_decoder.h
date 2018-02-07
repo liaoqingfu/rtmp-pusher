@@ -2,6 +2,9 @@
 //能用前置声明的地方尽量不使用 #include.
 #ifndef _AUDIO_DECODER_
 #define _AUDIO_DECODER_
+
+#define nullptr NULL
+
 namespace AudioCode
 {
 class AudioDecoder

@@ -2,13 +2,15 @@
 #define _BUFFER_H_
 #include <cstdlib>
 #include <stdint.h>
-#include <memory>
+#include <boost/shared_ptr.hpp>
+#define nullptr NULL
+
 using namespace std;
 
 class Buffer
 {
 public:
-	typedef std::shared_ptr<Buffer> BufferPtr;
+	typedef boost::shared_ptr<Buffer> BufferPtr;
     static Buffer * CreateInstance(int      size = 2048, const char * filter = nullptr);
     static int DestructorCount;
     static int ConstructorCount;

@@ -8,11 +8,8 @@
 #include <pthread.h>
 #include <time.h>
 #include <sys/time.h>
-#include <memory> // shared_ptr 
-
 #include "audio_decoder.h"
 #include "mp3_decoder.h"
-
 #include "audio_encoder.h"
 #include "mp3_encoder.h"
 #include "aac_encoder.h"
@@ -32,6 +29,7 @@ using namespace std;
 #define MAX_LAYERS		2
 #define FRAME_MAX_LEN	1024 * 5
 #define BUFFER_MAX_LEN	1024 * 1024 * 1
+int s_sin_port = 9010;
 
 
 long getNowTime()
@@ -80,8 +78,8 @@ int mp3DecodeEncode(const char *src_file, const char *dst_file)
 
    	
  	// 音频帧池
-	std::shared_ptr<AudioFramePool> audioFramePool = std::make_shared<AudioFramePool>(1);
-	printf("std::make_shared<AudioFramePool>(1)\n");
+	boost::shared_ptr<AudioFramePool> audioFramePool = boost::make_shared<AudioFramePool>(1);
+	printf("boost::make_shared<AudioFramePool>(1)\n");
 	audioFramePool->RegisterFramesPool(AudioFramePool::eAudioMp3, 10);
 	printf("RegisterFramesPool(AudioFramePool::eAudioMp3, 10)\n");
 	audioFramePool->RegisterFramesPool(AudioFramePool::eAudioAac, 10);
@@ -89,12 +87,12 @@ int mp3DecodeEncode(const char *src_file, const char *dst_file)
 
 	// 维护终端
 	TerminalStreamObserver::TerminalObserverPtr terminalObserver 
-			= std::make_shared<TerminalStreamObserver>(audioFramePool);
+			= boost::make_shared<TerminalStreamObserver>(audioFramePool);
 	
 	
  	// 创建服务器
 	TerminalServerThread::TerminalServerPtr terminalServer 
-			= std::make_shared<TerminalServerThread>(terminalObserver, 9005);	
+			= boost::make_shared<TerminalServerThread>(terminalObserver, s_sin_port);	
 	terminalServer->startLoop();
 
 	terminalObserver->startLoop();			// 启动服务	
@@ -103,21 +101,21 @@ int mp3DecodeEncode(const char *src_file, const char *dst_file)
  	
  	int size;
 
- 	std::shared_ptr<AudioDecoder>  mp3Decoder = std::make_shared<Mp3Decoder>();
+ 	boost::shared_ptr<AudioDecoder>  mp3Decoder = boost::make_shared<Mp3Decoder>();
    	if(mp3Decoder->Init(1) != 0)
    	{
         fprintf(stderr, "mp3Decoder->Init(1) failed\n");
 		return -1;
     }
 
-    std::shared_ptr<AudioEncoder> mp3Encoder = std::make_shared<Mp3Encoder>();
+    boost::shared_ptr<AudioEncoder> mp3Encoder = boost::make_shared<Mp3Encoder>();
     if(mp3Encoder->Init(44100, 2, 128000) != 0)
     {
         fprintf(stderr, "mp3Encoder->Init(44100, 2, 128000) failed\n");
 		return -1;
     }
 
-    std::shared_ptr<AudioEncoder> aacEncoder = std::make_shared<AacEncoder>();
+    boost::shared_ptr<AudioEncoder> aacEncoder = boost::make_shared<AacEncoder>();
     if(aacEncoder->Init(44100, 2, 192000) != 0)
     {
         fprintf(stderr, "mp3Encoder->Init(44100, 2, 192000) failed\n");
@@ -172,7 +170,7 @@ syncWordSearch:
             {
                 ++nFrames;
                 //printf("Found frame %d at offset = %ld B\nHeader Bits:\n", nFrames, ftell(ifMp3));
-                usleep(20000);       
+               // usleep(20000);       
                 //get the rest of the header:
                 ucHeaderByte3=getc(ifMp3);
                 ucHeaderByte4=getc(ifMp3);
@@ -229,13 +227,13 @@ syncWordSearch:
 				        }
 				        static int count = 0;
 				        //printf("audioFrameQueue.put count1 = %d\n", ++count);
-					 	audioFramePool->PutFrame(AudioFramePool::eAudioMp3, mp3Buff);
+					  	audioFramePool->PutFrame(AudioFramePool::eAudioMp3, mp3Buff);
 						//printf("%s(%d)\n", __FUNCTION__, __LINE__);
 		               	nFrameLength = OUTBUFF_MP3_RAW_FRAME;
 		               	if(mp3Encoder->Encode(mp3PcmBuffer, size, mp3RawBuffer, nFrameLength) == 0)
 		               	{
 		               		//printf("write a mp3 frame size = %d\n", nFrameLength);
-							fwrite( mp3RawBuffer, 1, nFrameLength, outMp3File ); 
+							//fwrite( mp3RawBuffer, 1, nFrameLength, outMp3File ); 
 		               	}
 
 		               
@@ -247,7 +245,7 @@ syncWordSearch:
 		               	nFrameLength = OUTBUFF_AAC_RAW_FRAME;
 		               	if(aacEncoder->Encode(aacPcmBuffer, OUTBUFF_AAC_PCM_FRAME, aacRawBuffer, nFrameLength) == 0)
 		               	{
-							fwrite( aacRawBuffer, 1, nFrameLength, outAacFile ); 
+							//fwrite( aacRawBuffer, 1, nFrameLength, outAacFile ); 
 							Buffer::BufferPtr aacBuff(Buffer::CreateInstance(nFrameLength));
 					        if(!aacBuff->Add(aacRawBuffer,nFrameLength))
 							{
@@ -255,7 +253,7 @@ syncWordSearch:
 								
 					        }
 					        //printf("%s(%d)\n", __FUNCTION__, __LINE__);
-							audioFramePool->PutFrame(AudioFramePool::eAudioAac, aacBuff);
+						 	audioFramePool->PutFrame(AudioFramePool::eAudioAac, aacBuff);
 		               	}
 		               	else
 		               	{
@@ -272,7 +270,7 @@ syncWordSearch:
 							nFrameLength = OUTBUFF_AAC_RAW_FRAME;			// 一定要设置，让底层知道你的buffer长度.
 							if(aacEncoder->Encode((const unsigned char *)aacPcmBuffer, OUTBUFF_AAC_PCM_FRAME, aacRawBuffer, nFrameLength) == 0)
 			               	{
-								fwrite( aacRawBuffer, 1, nFrameLength, outAacFile); 
+								//fwrite( aacRawBuffer, 1, nFrameLength, outAacFile); 
 								Buffer::BufferPtr aacBuff(Buffer::CreateInstance(nFrameLength));
 						        if(!aacBuff->Add(aacRawBuffer,nFrameLength))
 								{
@@ -280,7 +278,7 @@ syncWordSearch:
 									
 						        }
 						        //printf("%s(%d)\n", __FUNCTION__, __LINE__);
-								audioFramePool->PutFrame(AudioFramePool::eAudioAac, aacBuff);
+								 audioFramePool->PutFrame(AudioFramePool::eAudioAac, aacBuff);
 			               	}
 			               	else
 			               	{
@@ -291,7 +289,7 @@ syncWordSearch:
 	               	}
 
 	               	static int forBreakCount = 0;
-	                if(forBreakCount++ >= 1000)
+	                if(forBreakCount++ >= 2000)
 	               		break;
 	               	long curTime = getNowTime();
         			frameCount++;	
@@ -432,7 +430,7 @@ int main( int argc, char *argv[] )
 	sscanf( argv[1], "%s", src_file );
 	sscanf( argv[2], "%s", dst_file );
 	printf( "src %s, dst %s, d %s\n", argv[1], argv[2], argv[3] );
-	divison = atoi( argv[3] );
+	s_sin_port = atoi( argv[3] );
 	preTime = GetNowTime();
 	printf( "time 11 = %ldms\n", preTime );
 	mp3DecodeEncode( src_file, dst_file);

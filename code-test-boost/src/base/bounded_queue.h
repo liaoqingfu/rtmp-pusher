@@ -3,16 +3,17 @@
 
 #include <vector>
 #include <assert.h>
-#include <memory>
+#include <boost/shared_ptr.hpp>
 #include "mutex.h"
 #include "condition.h"
+#include "buffer.h"
+#include <stdio.h>
 using namespace std;
 
-template<typename T>
 class BoundedQueue
 {
 public:
-	typedef std::shared_ptr<BoundedQueue> QueuePtr;
+	typedef boost::shared_ptr<BoundedQueue> QueuePtr;
 	typedef enum {eOk = 0, eFull, eEmpty}ERetCode;
 	typedef enum {eAudioMp3 = 0,  eAudioAac}EAudioType;
 	explicit BoundedQueue(size_t maxSize, bool block = true)
@@ -24,8 +25,13 @@ public:
 	{
 		queue_.reserve(capacity_);
 	}
+
+	~BoundedQueue()
+	{
+		printf("~BoundedQueue\n");
+	}
 	
-	ERetCode put(const T& x)
+	ERetCode put(const Buffer::BufferPtr & x)
 	{
 		{
 			MutexLockGuard lock(mutex_);
@@ -47,7 +53,7 @@ public:
 
 	// 如果round不等于0,如果队列满则覆盖, 慎用该函数，如果存储对象不是shared_ptr，将会导致内存泄漏，如果为shared_ptr则会
 	// 自动调用对象的析构函数释放资源.
-	ERetCode put(int round, const T& x)
+	ERetCode put(int round, const Buffer::BufferPtr & x)
 	{
 		{
 			MutexLockGuard lock(mutex_);
@@ -67,7 +73,7 @@ public:
 			{
 				if(queue_.size() == capacity_)
 				{
-					T front(queue_.front());
+					Buffer::BufferPtr front(queue_.front());
 					queue_.erase(queue_.begin());		// 取出元素
 				}
 			}
@@ -78,7 +84,7 @@ public:
 		return eOk;
 	}
 	
-	ERetCode take(T& x)
+	ERetCode take(Buffer::BufferPtr & x)
 	{
 		MutexLockGuard lock(mutex_);
 		while(queue_.empty())
@@ -90,7 +96,7 @@ public:
 			notEmpty_.wait();
 		}
 		assert(!queue_.empty());
-		T front(queue_.front());
+		Buffer::BufferPtr front(queue_.front());
 		queue_.erase(queue_.begin());
 		x = front;
 		notFull_.notify();
@@ -129,7 +135,7 @@ private:
 	bool block_;				// 是否阻塞
 	Condition notEmpty_;
 	Condition notFull_;
-	std::vector<T> queue_;
+	std::vector<Buffer::BufferPtr> queue_;
 };
 
 #endif

@@ -13,9 +13,10 @@
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <functional>
+#include <boost/function.hpp>
 #include <iostream>
 #include <string>
+
 #include "atomic.h"
 
 namespace darren
@@ -25,7 +26,7 @@ namespace darren
 class Thread
 {
 public:
-	typedef std::function<void ()> threadfunc_;
+	typedef boost::function<void ()> threadfunc_;
 		
 	explicit Thread(const threadfunc_&, const std::string& n = std::string());
 	~Thread();

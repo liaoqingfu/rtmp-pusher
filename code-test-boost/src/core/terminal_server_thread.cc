@@ -1,10 +1,12 @@
 #include "terminal_server_thread.h"
 #include <cstring>
-TerminalServerThread::TerminalServerThread(TerminalStreamObserver::TerminalObserverPtr &terminalObserver,
+#include <boost/bind.hpp>
+#include <boost/function.hpp>
+TerminalServerThread::TerminalServerThread(TerminalStreamObserver::TerminalObserverPtr terminalObserver,
 													const int port)
 	:terminalObserver_(terminalObserver),
 	port_(port),
-	thread_(std::bind(&TerminalServerThread::Loop, this))
+	thread_(boost::bind(&TerminalServerThread::Loop, this))
 {}
 TerminalServerThread::~TerminalServerThread()
 {
@@ -89,7 +91,7 @@ void TerminalServerThread::Select()
 					{
 						terminalType  = Terminal::eTerminalAac;
 					}
-					Terminal::TerminalPtr terminal = std::make_shared<Terminal>(clnt_sock,terminalType);
+					Terminal *terminal = new Terminal(clnt_sock,terminalType);
 					terminal->SetSocketHandle(clnt_sock);
 					terminalObserver_->RegisterTerminal(clnt_sock, terminal);
 				}
