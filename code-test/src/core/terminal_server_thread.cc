@@ -98,7 +98,7 @@ void TerminalServerThread::Select()
 					str_len = read( i, buf_, NET_BUF_SIZE );
 					buf_[str_len] = '\0';
 					// 终端每收到一帧数据就回复给服务器,报告终端ID以及数据累计长度
-					printf("buf_ = %s\n", buf_); 				
+					//printf("buf_ = %s\n", buf_); 				
 					if ( str_len == 0 )                     	/* close request! */
 					{
 						str_len = write( i, buf_, NET_BUF_SIZE );

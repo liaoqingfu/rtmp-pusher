@@ -9,14 +9,14 @@ SharedBuffer::SharedBuffer(int size)
     buf_ = new unsigned char[size];
     capacity_ = size;
 	size_ = 0;
-	//printf("SharedBuffer size = %d\n", size);
+	// printf("SharedBuffer size = %d\n", size);
 	Buffer::ConstructorCount++;
 }
 SharedBuffer::~SharedBuffer()
 {
 	if(buf_)
 	{
-	 	 printf("~SharedBuffer count = %d,%d\n",  ++Buffer::DestructorCount, Buffer::ConstructorCount);
+	 	//printf("~SharedBuffer count = %d,%d\n",  ++Buffer::DestructorCount, Buffer::ConstructorCount);
 		delete [] buf_;
 		buf_ = nullptr;
 	}

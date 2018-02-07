@@ -16,7 +16,7 @@ public:
 	int GetSocketHandle();			
 	void SetId(int id);
 	int GetId();
-	void Send(Buffer::BufferPtr &buf); 
+	void Send(Buffer::BufferPtr buf); 
 	ETerminalType GetTerminalType();
 	void SetTerminalType(ETerminalType terminalType);
 private:

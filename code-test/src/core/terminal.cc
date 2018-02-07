@@ -30,7 +30,7 @@ int Terminal::GetId()
 	return id_;
 }
 
-void Terminal::Send(Buffer::BufferPtr &buf)
+void Terminal::Send(Buffer::BufferPtr buf)
 {
 	// 通过socket将数据发送出去
 	// 这里测试先直接发送，真正工程使用引入线程池来进行
@@ -39,7 +39,7 @@ void Terminal::Send(Buffer::BufferPtr &buf)
 		if(buf->Size() < BUFFER_LENGTH)
 			memcpy(&buffer_[0], buf->Data(), buf->Size());		// 这里只是为了测试性能
 		
-	 	printf("socketHandle_ = %d, type = %d, send buffer len = %d\n", socketHandle_, terminalType_, buf->Size());
+	 	//printf("socketHandle_ = %d, type = %d, send buffer len = %d\n", socketHandle_, terminalType_, buf->Size());
 		if(write( socketHandle_, buf->Data(), buf->Size()) < 0)
 		{
 			// 说明socket已经被关闭了

@@ -34,6 +34,14 @@ using namespace std;
 #define BUFFER_MAX_LEN	1024 * 1024 * 1
 
 
+long getNowTime()
+{
+	struct timeval tv;
+	gettimeofday( &tv, NULL );
+	/* printf("second = %d, u = %d\n", tv.tv_sec, tv.tv_usec); */
+	return( (long) (tv.tv_sec * 1000 + tv.tv_usec / 1000) );
+}
+
 long GetNowTime()
 {
 	struct timeval tv;
@@ -86,7 +94,7 @@ int mp3DecodeEncode(const char *src_file, const char *dst_file)
 	
  	// 创建服务器
 	TerminalServerThread::TerminalServerPtr terminalServer 
-			= std::make_shared<TerminalServerThread>(terminalObserver, 9010);	
+			= std::make_shared<TerminalServerThread>(terminalObserver, 9005);	
 	terminalServer->startLoop();
 
 	terminalObserver->startLoop();			// 启动服务	
@@ -146,10 +154,12 @@ int mp3DecodeEncode(const char *src_file, const char *dst_file)
     float fBitRateSum=0;
     long int lnPreviousFramePosition;
 	aacPcmIndex = 0;
-	while(0)
-	{
-		usleep(100000);
-	}
+
+	long palyStartTime = getNowTime();
+    long palyCurTime = 0;
+    float frameTime = 0;
+    long frameCount = 0;
+	printf("palyStartTime %ld\n",  palyStartTime);
 syncWordSearch:
     while( ftell(ifMp3) < lnNumberOfBytesInFile)
     {
@@ -170,6 +180,9 @@ syncWordSearch:
                 int nFrameSamplingFrequency = findFrameSamplingFrequency(ucHeaderByte3);
                 int nFrameBitRate = findFrameBitRate(ucHeaderByte3);
                 int nMpegVersionAndLayer = findMpegVersionAndLayer(ucHeaderByte2);
+
+				if(nFrameSamplingFrequency>0)
+                	frameTime = 1152* 1000.0/nFrameSamplingFrequency;
 
                 if( nFrameBitRate==0 || nFrameSamplingFrequency == 0 || nMpegVersionAndLayer==0 )
                 {//if this happens then we must have found the sync word but it was not actually part of the header
@@ -278,8 +291,14 @@ syncWordSearch:
 	               	}
 
 	               	static int forBreakCount = 0;
-	                if(forBreakCount++ >= 50)
+	                if(forBreakCount++ >= 1000)
 	               		break;
+	               	long curTime = getNowTime();
+        			frameCount++;	
+	               	if((curTime - palyStartTime) < (frameCount * frameTime))
+					{
+			            usleep(frameTime * 1000);
+					}	
                	}
                	else
                	{

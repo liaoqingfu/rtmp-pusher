@@ -83,7 +83,7 @@ void TerminalStreamObserver::Loop()
 		}
 		else
 		{
-			printf("ret1 = %d \n", ret);
+			//printf("ret1 = %d \n", ret);
 		}
 		ret = audioFramePool_->TakeFrame(AudioFramePool::eAudioAac, frameBuf_);
 		if(ret == 0)
@@ -93,7 +93,7 @@ void TerminalStreamObserver::Loop()
 		}
 		else
 		{
-			printf("ret2 = %d \n", ret);
+			//printf("ret2 = %d \n", ret);
 		}
 		usleep(22000);
 	}
